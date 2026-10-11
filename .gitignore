@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+backend/.venv/
+backend/.env
+backend/data/*.db
+backend/data/*.db-*
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/*.tsbuildinfo
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Playwright workspace
+tests/playwright/node_modules/
+tests/playwright/.env
+tests/playwright/test-results/
+tests/playwright/playwright-report/
+tests/playwright/blob-report/
+tests/playwright/playwright/.cache/
+tests/playwright/.auth/
+
+# k6 workspace (keep results/.gitkeep)
+tests/k6/.env
+tests/k6/results/*
+!tests/k6/results/.gitkeep
+
+# Test manager
+test-manager/data/catalogue.backup.json
+test-manager/data/*.tmp
+
+# Claude Code (personal settings) and Playwright MCP output
+.claude/settings.local.json
+.playwright-mcp/

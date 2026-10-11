@@ -1,0 +1,27 @@
+{
+  "name": "school-fees-playwright",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Playwright (TypeScript) UI and API tests for the FeeFlow school-fee app",
+  "scripts": {
+    "test": "playwright test",
+    "test:api": "playwright test --project=api",
+    "test:ui": "playwright test --project=ui-chromium",
+    "test:mobile": "playwright test --project=ui-mobile",
+    "test:hybrid": "playwright test --project=hybrid",
+    "test:headed": "playwright test --project=ui-chromium --headed",
+    "test:debug": "playwright test --debug",
+    "test:list": "playwright test --list",
+    "pw:ui": "playwright test --ui",
+    "report": "playwright show-report playwright-report",
+    "codegen": "playwright codegen http://localhost:5173",
+    "install:browsers": "playwright install chromium",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "20.17.6",
+    "dotenv": "16.4.5",
+    "typescript": "5.6.3"
+  }
+}

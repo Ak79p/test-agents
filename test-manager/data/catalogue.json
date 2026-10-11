@@ -1,0 +1,1682 @@
+{
+  "schemaVersion": 1,
+  "application": "FeeFlow school-fee payments (local practice app)",
+  "updatedAt": "2026-10-11T14:46:17Z",
+  "tests": [
+    {
+      "id": "AUTH-API-001",
+      "title": "Login with valid seeded credentials returns a usable bearer token",
+      "layer": "API",
+      "priority": "P0",
+      "objective": "Parents can authenticate and use the returned token on protected endpoints.",
+      "risk": "If login or token issuance breaks, no parent can view or pay fees.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "Any database state (seed data present)."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD)."
+      ],
+      "steps": [
+        "POST auth/login with body {\"email\": TEST_USER_EMAIL, \"password\": TEST_USER_PASSWORD}.",
+        "Record access_token and expires_at from the response.",
+        "GET auth/me with header Authorization: Bearer <access_token>."
+      ],
+      "expectedResults": [
+        "Step 1: HTTP 200; body has non-empty access_token, token_type == \"Bearer\", expires_at is a future ISO-8601 timestamp (≈120 minutes ahead with default TOKEN_TTL_MINUTES).",
+        "Step 1: parent == {id: \"par_001\", email: \"thandi.mokoena@example.com\", full_name: \"Thandi Mokoena\"} (phone present).",
+        "Step 3: HTTP 200 and body equals the parent object returned by login.",
+        "Every response carries an X-Request-ID header."
+      ],
+      "references": [
+        "POST /api/v1/auth/login",
+        "GET /api/v1/auth/me"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "AUTH-API-002",
+      "title": "Invalid credentials and malformed login bodies are rejected",
+      "layer": "API",
+      "priority": "P1",
+      "objective": "Login rejects wrong passwords, unknown users and invalid input with the documented errors.",
+      "risk": "Weak credential handling or leaky error messages are a security risk; wrong status codes break clients.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development)."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD).",
+        "Unknown user: nobody@example.com"
+      ],
+      "steps": [
+        "POST auth/login with the correct email and password \"wrong-password\".",
+        "POST auth/login with email nobody@example.com and any password.",
+        "POST auth/login with {\"email\": \"not-an-email\", \"password\": \"x\"}.",
+        "POST auth/login with {\"email\": TEST_USER_EMAIL} (password missing)."
+      ],
+      "expectedResults": [
+        "Steps 1–2: HTTP 401, error.code == \"INVALID_CREDENTIALS\", error.message == \"Invalid email or password.\" (identical for unknown user and wrong password – no user enumeration); no access_token in body.",
+        "Step 3: HTTP 422, error.code == \"VALIDATION_ERROR\", error.details contains {location: \"body\", field: \"email\", message: \"Enter a valid email address.\"}.",
+        "Step 4: HTTP 422 VALIDATION_ERROR with a details entry for field \"password\".",
+        "All error bodies match {error: {code, message, details, request_id}}."
+      ],
+      "references": [
+        "POST /api/v1/auth/login"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "AUTH-API-003",
+      "title": "Protected endpoints reject missing, invalid and revoked tokens",
+      "layer": "API",
+      "priority": "P0",
+      "objective": "Fee and payment data are only accessible with a valid, unrevoked token.",
+      "risk": "Unauthenticated access to children's fee and payment data.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development)."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD)."
+      ],
+      "steps": [
+        "GET fees/outstanding with no Authorization header.",
+        "GET fees/outstanding with Authorization: Bearer invalid-token-123.",
+        "Log in (POST auth/login) and GET fees/outstanding with the new token.",
+        "POST auth/logout with that token.",
+        "GET fees/outstanding again with the same (now revoked) token."
+      ],
+      "expectedResults": [
+        "Step 1: HTTP 401, error.code == \"UNAUTHORIZED\", response header WWW-Authenticate: Bearer.",
+        "Step 2: HTTP 401, error.code == \"INVALID_TOKEN\".",
+        "Step 3: HTTP 200.",
+        "Step 4: HTTP 204 with empty body.",
+        "Step 5: HTTP 401, error.code == \"INVALID_TOKEN\"."
+      ],
+      "references": [
+        "GET /api/v1/fees/outstanding",
+        "POST /api/v1/auth/logout"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "AUTH-API-004",
+      "title": "A parent cannot read or pay another parent's students, fees or payments",
+      "layer": "API",
+      "priority": "P0",
+      "objective": "Ownership checks isolate each parent's data and return 404 (no existence leak).",
+      "risk": "Broken object-level authorisation (BOLA/IDOR) would expose or allow paying other families' fees.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "Database freshly seeded: call POST /api/v1/dev/reset before logging in (a reset invalidates every access token, so never call it mid-test)."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD).",
+        "Resources owned by John Smith (par_002): student stu_1003, fee fee_1010, payment pay_seed_0007."
+      ],
+      "steps": [
+        "Log in as Thandi.",
+        "GET students/stu_1003.",
+        "GET fees/fee_1010.",
+        "GET payments/pay_seed_0007.",
+        "POST payments with Idempotency-Key <new UUID> and body {\"fee_id\": \"fee_1010\", \"amount_cents\": 100}.",
+        "GET transactions?page_size=100."
+      ],
+      "expectedResults": [
+        "Step 2: HTTP 404, error.code == \"STUDENT_NOT_FOUND\".",
+        "Step 3: HTTP 404, error.code == \"FEE_NOT_FOUND\".",
+        "Step 4: HTTP 404, error.code == \"PAYMENT_NOT_FOUND\".",
+        "Step 5: HTTP 404, error.code == \"FEE_NOT_FOUND\"; no payment is created.",
+        "Step 6: every item has student_id in {stu_1001, stu_1002}; total == 6 on a fresh seed."
+      ],
+      "references": [
+        "GET /api/v1/students/{student_id}",
+        "GET /api/v1/fees/{fee_id}",
+        "GET /api/v1/payments/{payment_id}",
+        "POST /api/v1/payments"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "FEE-API-001",
+      "title": "Outstanding fees list is complete, ordered and correctly totalled",
+      "layer": "API",
+      "priority": "P0",
+      "objective": "The outstanding-fees endpoint returns exactly the unpaid fees with correct balances, overdue flags and totals.",
+      "risk": "Wrong balances or totals make parents over/under-pay or miss overdue fees.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "Database freshly seeded: call POST /api/v1/dev/reset before logging in (a reset invalidates every access token, so never call it mid-test)."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD).",
+        "Expected seed (relative to seed date): fee_1006 Grade 9 Exam Fee 45 000 overdue; fee_1002 Term 3 Transport 120 000 overdue; fee_1003 Term 3 Tuition 845 000; fee_1007 Term 3 Tuition 1 280 000; fee_1004 Science Centre Excursion balance 35 000; fee_1008 Soccer Academy 95 000."
+      ],
+      "steps": [
+        "Log in as Thandi.",
+        "GET fees/outstanding.",
+        "GET fees/outstanding?student_id=stu_1001.",
+        "GET fees/outstanding?overdue_only=true."
+      ],
+      "expectedResults": [
+        "Step 2: HTTP 200; items IDs in order [fee_1006, fee_1002, fee_1003, fee_1007, fee_1004, fee_1008] (ascending due_date, then id).",
+        "Step 2: count == 6 == items.length; total_outstanding_cents == 2 420 000 == sum(balance_cents); overdue_cents == 165 000; currency == \"ZAR\".",
+        "Step 2: every item has balance_cents == amount_cents − amount_paid_cents > 0; paid fees fee_1001 and fee_1005 are absent.",
+        "Step 2: fee_1006 and fee_1002 have is_overdue == true and days_until_due < 0; fee_1004 has status \"PARTIALLY_PAID\"; the others \"OUTSTANDING\".",
+        "Step 3: only fee_1002, fee_1003, fee_1004; total_outstanding_cents == 1 000 000.",
+        "Step 4: only fee_1006 and fee_1002; total_outstanding_cents == overdue_cents == 165 000."
+      ],
+      "references": [
+        "GET /api/v1/fees/outstanding"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "FEE-API-002",
+      "title": "Fee detail reflects partial payments and payment history",
+      "layer": "API",
+      "priority": "P1",
+      "objective": "A single fee exposes consistent amounts, derived status and its payments.",
+      "risk": "Inconsistent fee detail misleads parents about what they still owe.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "Database freshly seeded: call POST /api/v1/dev/reset before logging in (a reset invalidates every access token, so never call it mid-test)."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD).",
+        "fee_1004 Science Centre Excursion: amount 65 000, paid 30 000 via pay_seed_0004."
+      ],
+      "steps": [
+        "Log in as Thandi.",
+        "GET fees/fee_1004.",
+        "GET students/stu_1001/fees?status=PARTIALLY_PAID.",
+        "GET students/stu_1001/fees?status=PAID."
+      ],
+      "expectedResults": [
+        "Step 2: HTTP 200; amount_cents 65 000, amount_paid_cents 30 000, balance_cents 35 000, status \"PARTIALLY_PAID\", is_overdue false, student_name \"Lerato Mokoena\".",
+        "Step 2: payments has exactly one entry: id pay_seed_0004, status \"SUCCEEDED\", amount_cents 30 000; has_payment_in_progress == false.",
+        "Step 3: exactly [fee_1004].",
+        "Step 4: exactly [fee_1001] with balance_cents 0."
+      ],
+      "references": [
+        "GET /api/v1/fees/{fee_id}",
+        "GET /api/v1/students/{student_id}/fees"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-API-001",
+      "title": "Create payment returns a PENDING payment without moving money",
+      "layer": "API",
+      "priority": "P0",
+      "objective": "Payment creation records a PENDING payment for the requested fee and amount.",
+      "risk": "Core payment entry point; errors here block all payments or corrupt amounts.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "Simulation settings at .env defaults (DELETE /api/v1/dev/simulation), notably gateway_latency_ms=800, pending_resolution_seconds=8."
+      ],
+      "testData": [
+        "Dedicated account loadtest050@example.com (seeded password, root README §6). Fees: Term 3 Tuition (balance 50 000 000 cents, currently fee_1170), Term 3 Transport (10 000 000, fee_1171), Annual Excursions (5 000 000, fee_1172). Resolve IDs via GET /fees/outstanding rather than hard-coding them.",
+        "Amount: 10 000 cents (R 100.00); Idempotency-Key: new UUID."
+      ],
+      "steps": [
+        "Log in as loadtest050 and GET fees/outstanding; take the Term 3 Tuition fee (feeId) and note its balance_cents.",
+        "POST payments with header Idempotency-Key: <UUID> and body {\"fee_id\": feeId, \"amount_cents\": 10000, \"payment_method\": \"CARD\"}.",
+        "GET payments/{id} using the id from step 2.",
+        "GET fees/{feeId}."
+      ],
+      "expectedResults": [
+        "Step 2: HTTP 201; headers Location == /api/v1/payments/{id} and Idempotency-Key echoes the sent key; no Idempotent-Replayed header.",
+        "Step 2: body status \"PENDING\", amount_cents 10000, currency \"ZAR\", fee_id == feeId, payment_method \"CARD\", is_final false, is_cancellable true, confirm_attempts 0, card_last4 null, reference matches ^SF-\\d{8}-[0-9A-F]{6}$, id matches ^pay_[0-9a-f]{24}$.",
+        "Step 2: events == [{type: \"PAYMENT_CREATED\", to_status: \"PENDING\"}].",
+        "Step 3: HTTP 200 and identical payment.",
+        "Step 4: balance_cents unchanged from step 1 (creation does not credit the fee)."
+      ],
+      "references": [
+        "POST /api/v1/payments",
+        "GET /api/v1/payments/{payment_id}"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-API-002",
+      "title": "Replaying the same Idempotency-Key and body returns the original payment",
+      "layer": "API",
+      "priority": "P0",
+      "objective": "Retries of a create request never create a second payment.",
+      "risk": "Duplicate charges when clients retry after timeouts or double-clicks.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development)."
+      ],
+      "testData": [
+        "Dedicated account loadtest050@example.com (seeded password, root README §6). Fees: Term 3 Tuition (balance 50 000 000 cents, currently fee_1170), Term 3 Transport (10 000 000, fee_1171), Annual Excursions (5 000 000, fee_1172). Resolve IDs via GET /fees/outstanding rather than hard-coding them.",
+        "Body {\"fee_id\": <Term 3 Tuition id>, \"amount_cents\": 10000, \"payment_method\": \"CARD\"}; one fixed UUID key."
+      ],
+      "steps": [
+        "Log in as loadtest050; note GET transactions?fee_id={feeId} total (T0).",
+        "POST payments with key K and the body.",
+        "POST payments again with the same key K and identical body.",
+        "GET transactions?fee_id={feeId}."
+      ],
+      "expectedResults": [
+        "Step 2: HTTP 201.",
+        "Step 3: HTTP 200 with header Idempotent-Replayed: true; body.id and body.reference equal step 2's.",
+        "Step 4: total == T0 + 1 (exactly one payment created)."
+      ],
+      "references": [
+        "POST /api/v1/payments",
+        "GET /api/v1/transactions"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-API-003",
+      "title": "Reusing an Idempotency-Key with a different body is rejected",
+      "layer": "API",
+      "priority": "P0",
+      "objective": "An idempotency key is bound to its original request payload.",
+      "risk": "A key reused with a different amount could silently return the wrong payment or create a mismatched charge.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development)."
+      ],
+      "testData": [
+        "Dedicated account loadtest050@example.com (seeded password, root README §6). Fees: Term 3 Tuition (balance 50 000 000 cents, currently fee_1170), Term 3 Transport (10 000 000, fee_1171), Annual Excursions (5 000 000, fee_1172). Resolve IDs via GET /fees/outstanding rather than hard-coding them.",
+        "Key K (new UUID); original amount 10 000; conflicting amount 20 000 (same fee)."
+      ],
+      "steps": [
+        "Log in as loadtest050 and resolve the Term 3 Tuition fee id.",
+        "POST payments with key K and amount_cents 10000; record payment id P.",
+        "POST payments with the same key K and amount_cents 20000.",
+        "GET transactions?fee_id={feeId}&page_size=100."
+      ],
+      "expectedResults": [
+        "Step 2: HTTP 201.",
+        "Step 3: HTTP 422, error.code == \"IDEMPOTENCY_KEY_REUSED\", error.details.payment_id == P.",
+        "Step 4: no payment with amount_cents 20000 exists for this key; P still has amount_cents 10000."
+      ],
+      "references": [
+        "POST /api/v1/payments"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-API-004",
+      "title": "Missing or malformed Idempotency-Key is rejected before any payment is created",
+      "layer": "API",
+      "priority": "P0",
+      "objective": "The API enforces an Idempotency-Key on payment creation.",
+      "risk": "Without a key, client retries cannot be de-duplicated.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development)."
+      ],
+      "testData": [
+        "Dedicated account loadtest050@example.com (seeded password, root README §6). Fees: Term 3 Tuition (balance 50 000 000 cents, currently fee_1170), Term 3 Transport (10 000 000, fee_1171), Annual Excursions (5 000 000, fee_1172). Resolve IDs via GET /fees/outstanding rather than hard-coding them.",
+        "Malformed keys: \"short\" (5 chars), \"has spaces in key\", 256 × \"a\"."
+      ],
+      "steps": [
+        "Log in as loadtest050; note transactions total (T0).",
+        "POST payments with a valid body and no Idempotency-Key header.",
+        "Repeat with each malformed key.",
+        "GET transactions."
+      ],
+      "expectedResults": [
+        "Step 2: HTTP 400, error.code == \"IDEMPOTENCY_KEY_MISSING\".",
+        "Step 3: HTTP 400, error.code == \"IDEMPOTENCY_KEY_INVALID\" for each malformed key.",
+        "Step 4: total == T0."
+      ],
+      "references": [
+        "POST /api/v1/payments"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-API-005",
+      "title": "Concurrent duplicate create requests produce exactly one payment",
+      "layer": "API",
+      "priority": "P0",
+      "objective": "The idempotency guarantee holds under concurrency, not just sequential retries.",
+      "risk": "Race conditions creating duplicate payments under double-submit or retry storms.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development)."
+      ],
+      "testData": [
+        "Dedicated account loadtest050@example.com (seeded password, root README §6). Fees: Term 3 Tuition (balance 50 000 000 cents, currently fee_1170), Term 3 Transport (10 000 000, fee_1171), Annual Excursions (5 000 000, fee_1172). Resolve IDs via GET /fees/outstanding rather than hard-coding them.",
+        "20 parallel requests, identical key K and body (amount 10 000)."
+      ],
+      "steps": [
+        "Log in as loadtest050; note transactions?fee_id total (T0).",
+        "Fire 20 POST payments requests in parallel (Promise.all) with the same key and body.",
+        "GET transactions?fee_id={feeId}."
+      ],
+      "expectedResults": [
+        "Exactly one response is 201; the other 19 are 200 with Idempotent-Replayed: true.",
+        "All 20 responses carry the same payment id.",
+        "No response is 409, 422 or 5xx.",
+        "Step 3: total == T0 + 1."
+      ],
+      "references": [
+        "POST /api/v1/payments"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-API-006",
+      "title": "Payment amount and fee-state validation rules",
+      "layer": "API",
+      "priority": "P0",
+      "objective": "Creation rejects invalid amounts, unknown fields and already-paid fees with specific errors.",
+      "risk": "Overpayment, zero/negative charges or payments against settled fees.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "Database freshly seeded: call POST /api/v1/dev/reset before logging in (a reset invalidates every access token, so never call it mid-test)."
+      ],
+      "testData": [
+        "Dedicated account loadtest050@example.com (seeded password, root README §6). Fees: Term 3 Tuition (balance 50 000 000 cents, currently fee_1170), Term 3 Transport (10 000 000, fee_1171), Annual Excursions (5 000 000, fee_1172). Resolve IDs via GET /fees/outstanding rather than hard-coding them.",
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD). Paid fee: fee_1001.",
+        "Each request uses a new UUID key."
+      ],
+      "steps": [
+        "As loadtest050, POST payments with amount_cents = balance_cents + 1 for the Term 3 Tuition fee.",
+        "POST with amount_cents 0, then −500.",
+        "POST with amount_cents 50 (partial below R1.00).",
+        "POST with an extra body field {\"extra\": 1}.",
+        "POST with fee_id \"fee_does_not_exist\".",
+        "As Thandi, POST with fee_id fee_1001, amount_cents 100."
+      ],
+      "expectedResults": [
+        "Step 1: HTTP 422, error.code \"AMOUNT_EXCEEDS_BALANCE\", details.balance_cents == the fee balance.",
+        "Step 2: HTTP 422 VALIDATION_ERROR with details field \"amount_cents\" for both.",
+        "Step 3: HTTP 422, error.code \"AMOUNT_TOO_SMALL\", details.minimum_cents == 100.",
+        "Step 4: HTTP 422 VALIDATION_ERROR, details includes {field: \"extra\", type: \"extra_forbidden\"}.",
+        "Step 5: HTTP 404 FEE_NOT_FOUND.",
+        "Step 6: HTTP 409, error.code \"FEE_ALREADY_PAID\".",
+        "No payment is created by any step."
+      ],
+      "references": [
+        "POST /api/v1/payments"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-API-007",
+      "title": "Successful confirmation moves PENDING → SUCCEEDED and credits the fee once",
+      "layer": "API",
+      "priority": "P0",
+      "objective": "The happy-path state transition and fee crediting are correct and final.",
+      "risk": "Paid fees not credited, double crediting, or payments re-confirmable after success.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "Simulation settings at .env defaults (DELETE /api/v1/dev/simulation), notably gateway_latency_ms=800, pending_resolution_seconds=8."
+      ],
+      "testData": [
+        "Dedicated account loadtest050@example.com (seeded password, root README §6). Fees: Term 3 Tuition (balance 50 000 000 cents, currently fee_1170), Term 3 Transport (10 000 000, fee_1171), Annual Excursions (5 000 000, fee_1172). Resolve IDs via GET /fees/outstanding rather than hard-coding them.",
+        "Card body: {\"card\":{\"number\":\"4242424242424242\",\"expiry_month\":12,\"expiry_year\":2030,\"cvc\":\"123\",\"holder_name\":\"Load Test\"}}",
+        "Amount 10 000."
+      ],
+      "steps": [
+        "As loadtest050, note Term 3 Tuition amount_paid_cents (A0); create a payment (new key, 10 000).",
+        "POST payments/{id}/confirm with the success card.",
+        "GET fees/{feeId}.",
+        "POST payments/{id}/confirm again with the same card.",
+        "POST payments/{id}/cancel."
+      ],
+      "expectedResults": [
+        "Step 2: HTTP 200; status \"SUCCEEDED\", is_final true, is_cancellable false, card_brand \"VISA\", card_last4 \"4242\", gateway_reference non-null, completed_at non-null, confirm_attempts 1, failure_code null.",
+        "Step 2: events types in order [PAYMENT_CREATED, CONFIRMATION_SUBMITTED, PAYMENT_SUCCEEDED].",
+        "Step 2: response time ≥ gateway_latency_ms (800 ms default).",
+        "Step 3: amount_paid_cents == A0 + 10 000.",
+        "Step 4: HTTP 409, error.code \"INVALID_PAYMENT_STATE\", details.status \"SUCCEEDED\".",
+        "Step 5: HTTP 409, error.code \"PAYMENT_NOT_CANCELLABLE\".",
+        "The full card number never appears in any response."
+      ],
+      "references": [
+        "POST /api/v1/payments/{payment_id}/confirm",
+        "POST /api/v1/payments/{payment_id}/cancel"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-API-008",
+      "title": "Declined cards produce FAILED payments with specific failure codes",
+      "layer": "API",
+      "priority": "P0",
+      "objective": "Each deterministic decline card yields the documented failure code and leaves the fee untouched.",
+      "risk": "Declines recorded as success (unpaid fee shown as paid) or uninformative failures.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "Simulation settings at .env defaults (DELETE /api/v1/dev/simulation), notably gateway_latency_ms=800, pending_resolution_seconds=8."
+      ],
+      "testData": [
+        "Dedicated account loadtest050@example.com (seeded password, root README §6). Fees: Term 3 Tuition (balance 50 000 000 cents, currently fee_1170), Term 3 Transport (10 000 000, fee_1171), Annual Excursions (5 000 000, fee_1172). Resolve IDs via GET /fees/outstanding rather than hard-coding them.",
+        "Cards (data-driven): 4000000000000002 → CARD_DECLINED; 4000000000009995 → INSUFFICIENT_FUNDS; 4000000000000069 → EXPIRED_CARD."
+      ],
+      "steps": [
+        "For each card: as loadtest050 create a new payment (new key, 1 000 cents) on the Annual Excursions fee.",
+        "POST payments/{id}/confirm with the card (expiry 12/2030, cvc 123).",
+        "GET fees/{feeId} after all cards."
+      ],
+      "expectedResults": [
+        "Each confirm: HTTP 200 (the API call succeeded), status \"FAILED\", is_final true, failure_code as mapped, failure_message non-empty (CARD_DECLINED → \"The card was declined by the issuing bank.\"), completed_at set.",
+        "Events end with PAYMENT_FAILED (to_status FAILED).",
+        "Fee amount_paid_cents unchanged."
+      ],
+      "references": [
+        "POST /api/v1/payments/{payment_id}/confirm",
+        "GET /api/v1/dev/test-cards"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-API-009",
+      "title": "Gateway error returns 502, keeps the payment retryable, and a retry succeeds",
+      "layer": "API",
+      "priority": "P1",
+      "objective": "Transient gateway failures do not lose or fail the payment; the parent can retry.",
+      "risk": "Payments stuck or failed permanently because of a transient provider error.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "Simulation settings at .env defaults (DELETE /api/v1/dev/simulation), notably gateway_latency_ms=800, pending_resolution_seconds=8."
+      ],
+      "testData": [
+        "Dedicated account loadtest050@example.com (seeded password, root README §6). Fees: Term 3 Tuition (balance 50 000 000 cents, currently fee_1170), Term 3 Transport (10 000 000, fee_1171), Annual Excursions (5 000 000, fee_1172). Resolve IDs via GET /fees/outstanding rather than hard-coding them.",
+        "Gateway-error card 4000000000000119; then success card 4242424242424242."
+      ],
+      "steps": [
+        "As loadtest050 create a payment (1 000 cents).",
+        "POST payments/{id}/confirm with 4000000000000119.",
+        "GET payments/{id}.",
+        "POST payments/{id}/confirm with 4242424242424242."
+      ],
+      "expectedResults": [
+        "Step 2: HTTP 502, error.code \"GATEWAY_ERROR\", error.details == {payment_id, status: \"PENDING\", retryable: true}.",
+        "Step 3: status \"PENDING\", is_cancellable true, failure_code \"GATEWAY_ERROR\", events include GATEWAY_ERROR (PROCESSING → PENDING).",
+        "Step 4: HTTP 200, status \"SUCCEEDED\", confirm_attempts 2, failure_code null."
+      ],
+      "references": [
+        "POST /api/v1/payments/{payment_id}/confirm"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-API-010",
+      "title": "Gateway timeout returns 504, blocks new payments for the fee, then settles as FAILED",
+      "layer": "API",
+      "priority": "P1",
+      "objective": "Unknown gateway outcomes are held in PROCESSING and reconciled; concurrent payments on the same fee are blocked meanwhile.",
+      "risk": "Double charging while an outcome is unknown, or payments stuck forever in PROCESSING.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "Simulation shortened in setup: PUT dev/simulation {\"gateway_timeout_ms\": 500, \"pending_resolution_seconds\": 2}; restore with DELETE dev/simulation in teardown."
+      ],
+      "testData": [
+        "Account loadtest049@example.com (avoid colliding with other tests), Term 3 Transport fee.",
+        "Timeout card 4000000000001018."
+      ],
+      "steps": [
+        "Create a payment (1 000 cents) and confirm with the timeout card; measure duration.",
+        "Immediately GET payments/{id}/status.",
+        "POST a new payment for the same fee (new key).",
+        "Wait 2.5 s, then GET payments/{id}/status and GET payments/{id}."
+      ],
+      "expectedResults": [
+        "Step 1: HTTP 504 after ≥ 500 ms; error.code \"GATEWAY_TIMEOUT\", details.status \"PROCESSING\", details.retry_after_ms 1000.",
+        "Step 2: status \"PROCESSING\", is_final false, retry_after_ms 1000.",
+        "Step 3: HTTP 409, error.code \"PAYMENT_IN_PROGRESS\", details.payment_id == the processing payment.",
+        "Step 4: status \"FAILED\", failure_code \"GATEWAY_TIMEOUT\", is_final true; events include GATEWAY_TIMEOUT then PAYMENT_FAILED; fee not credited."
+      ],
+      "references": [
+        "POST /api/v1/payments/{payment_id}/confirm",
+        "GET /api/v1/payments/{payment_id}/status",
+        "PUT /api/v1/dev/simulation"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-API-011",
+      "title": "Asynchronous processing returns 202 and settles to SUCCEEDED via status polling",
+      "layer": "API",
+      "priority": "P1",
+      "objective": "The polling contract (202 + /status) delivers the final outcome and credits the fee.",
+      "risk": "Clients never learning the final outcome of async payments.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "Simulation: PUT dev/simulation {\"pending_resolution_seconds\": 2}; restore afterwards."
+      ],
+      "testData": [
+        "Account loadtest049@example.com, Annual Excursions fee.",
+        "Async-success card 4000000000002024."
+      ],
+      "steps": [
+        "Create a payment (1 000 cents); note fee amount_paid_cents (A0).",
+        "POST payments/{id}/confirm with 4000000000002024.",
+        "Poll GET payments/{id}/status every retry_after_ms until is_final (max 10 s).",
+        "GET fees/{feeId}."
+      ],
+      "expectedResults": [
+        "Step 2: HTTP 202, status \"PROCESSING\", events include PROCESSING_ASYNC.",
+        "Step 3: initial polls return PROCESSING with retry_after_ms 1000; final poll returns status \"SUCCEEDED\", is_final true, within ~2–4 s.",
+        "Step 4: amount_paid_cents == A0 + 1 000."
+      ],
+      "references": [
+        "POST /api/v1/payments/{payment_id}/confirm",
+        "GET /api/v1/payments/{payment_id}/status"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-API-012",
+      "title": "Cancelling a PENDING payment is final and prevents confirmation",
+      "layer": "API",
+      "priority": "P1",
+      "objective": "Parents can abandon a payment before confirmation; cancelled payments can never be charged.",
+      "risk": "Cancelled payments later charged, or cancellation of in-flight payments.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development)."
+      ],
+      "testData": [
+        "Dedicated account loadtest050@example.com (seeded password, root README §6). Fees: Term 3 Tuition (balance 50 000 000 cents, currently fee_1170), Term 3 Transport (10 000 000, fee_1171), Annual Excursions (5 000 000, fee_1172). Resolve IDs via GET /fees/outstanding rather than hard-coding them.",
+        "Card body: {\"card\":{\"number\":\"4242424242424242\",\"expiry_month\":12,\"expiry_year\":2030,\"cvc\":\"123\",\"holder_name\":\"Load Test\"}}"
+      ],
+      "steps": [
+        "Create a payment (1 000 cents).",
+        "POST payments/{id}/cancel.",
+        "POST payments/{id}/cancel again.",
+        "POST payments/{id}/confirm with the success card.",
+        "GET fees/{feeId}."
+      ],
+      "expectedResults": [
+        "Step 2: HTTP 200, status \"CANCELLED\", is_final true, completed_at set, last event PAYMENT_CANCELLED.",
+        "Step 3: HTTP 409 PAYMENT_NOT_CANCELLABLE, details.status \"CANCELLED\".",
+        "Step 4: HTTP 409 INVALID_PAYMENT_STATE.",
+        "Step 5: fee amount_paid_cents unchanged."
+      ],
+      "references": [
+        "POST /api/v1/payments/{payment_id}/cancel"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-API-013",
+      "title": "Card validation errors return field-level 422 and leave the payment PENDING",
+      "layer": "API",
+      "priority": "P1",
+      "objective": "Invalid card input is rejected before reaching the gateway, with actionable field errors.",
+      "risk": "Malformed card data reaching the gateway or consuming a confirmation attempt.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development)."
+      ],
+      "testData": [
+        "Dedicated account loadtest050@example.com (seeded password, root README §6). Fees: Term 3 Tuition (balance 50 000 000 cents, currently fee_1170), Term 3 Transport (10 000 000, fee_1171), Annual Excursions (5 000 000, fee_1172). Resolve IDs via GET /fees/outstanding rather than hard-coding them.",
+        "Invalid card body: {\"card\": {\"number\": \"4242424242424241\", \"expiry_month\": 13, \"expiry_year\": 2020, \"cvc\": \"12\", \"holder_name\": \"\"}}"
+      ],
+      "steps": [
+        "Create a payment (1 000 cents).",
+        "POST payments/{id}/confirm with the invalid card body.",
+        "POST confirm with number 4242424242424241 only invalid (other fields valid).",
+        "POST confirm with expiry_month 1, expiry_year 2020 (others valid).",
+        "GET payments/{id}."
+      ],
+      "expectedResults": [
+        "Step 2: HTTP 422 VALIDATION_ERROR; details include fields card.number, card.expiry_month, card.cvc and card.holder_name.",
+        "Step 3: details contain {field: \"card.number\", message: \"Card number is invalid.\"}.",
+        "Step 4: details contain message \"Card has expired.\".",
+        "Step 5: status \"PENDING\", confirm_attempts 0, card_last4 null."
+      ],
+      "references": [
+        "POST /api/v1/payments/{payment_id}/confirm"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-API-014",
+      "title": "Concurrent confirmations of one payment charge it exactly once",
+      "layer": "API",
+      "priority": "P1",
+      "objective": "The PENDING → PROCESSING transition is atomic under concurrent confirms.",
+      "risk": "Double charge when a client double-submits the pay button or retries aggressively.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "Simulation settings at .env defaults (DELETE /api/v1/dev/simulation), notably gateway_latency_ms=800, pending_resolution_seconds=8."
+      ],
+      "testData": [
+        "Dedicated account loadtest050@example.com (seeded password, root README §6). Fees: Term 3 Tuition (balance 50 000 000 cents, currently fee_1170), Term 3 Transport (10 000 000, fee_1171), Annual Excursions (5 000 000, fee_1172). Resolve IDs via GET /fees/outstanding rather than hard-coding them.",
+        "Card body: {\"card\":{\"number\":\"4242424242424242\",\"expiry_month\":12,\"expiry_year\":2030,\"cvc\":\"123\",\"holder_name\":\"Load Test\"}}"
+      ],
+      "steps": [
+        "Create a payment (1 000 cents); note fee amount_paid_cents (A0).",
+        "Send 5 POST payments/{id}/confirm requests in parallel with the success card.",
+        "GET payments/{id} and GET fees/{feeId}."
+      ],
+      "expectedResults": [
+        "Exactly one confirm returns HTTP 200 with status SUCCEEDED; the other four return HTTP 409 INVALID_PAYMENT_STATE.",
+        "Payment confirm_attempts == 1 and events contain exactly one CONFIRMATION_SUBMITTED.",
+        "amount_paid_cents == A0 + 1 000."
+      ],
+      "references": [
+        "POST /api/v1/payments/{payment_id}/confirm"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-API-015",
+      "title": "Racing payments for the last balance never overpay the fee",
+      "layer": "API",
+      "priority": "P1",
+      "objective": "Fee crediting is conditional on remaining balance, so concurrent payments cannot exceed the fee amount.",
+      "risk": "Overpayment (taking more money than owed) when two payments complete simultaneously.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "Database freshly seeded: call POST /api/v1/dev/reset before logging in (a reset invalidates every access token, so never call it mid-test).",
+        "Simulation settings at .env defaults (DELETE /api/v1/dev/simulation), notably gateway_latency_ms=800, pending_resolution_seconds=8."
+      ],
+      "testData": [
+        "Account john.smith@example.com (SECONDARY_USER_*), fee_1011 Winter Uniform, balance 185 000.",
+        "Card body: {\"card\":{\"number\":\"4242424242424242\",\"expiry_month\":12,\"expiry_year\":2030,\"cvc\":\"123\",\"holder_name\":\"Load Test\"}}"
+      ],
+      "steps": [
+        "Log in as John; create two payments A and B, each for amount_cents 185 000 (different keys).",
+        "Confirm A and B in parallel with the success card.",
+        "GET fees/fee_1011, GET payments/A and payments/B."
+      ],
+      "expectedResults": [
+        "Exactly one of A/B ends SUCCEEDED.",
+        "The other either: returns HTTP 200 with status FAILED and failure_code \"BALANCE_CHANGED\", or returns HTTP 409 AMOUNT_EXCEEDS_BALANCE and stays PENDING (depends on timing) – both are acceptable.",
+        "fee_1011 amount_paid_cents == 185 000, balance_cents 0, status PAID (never above amount_cents)."
+      ],
+      "references": [
+        "POST /api/v1/payments/{payment_id}/confirm",
+        "GET /api/v1/fees/{fee_id}"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "TXN-API-001",
+      "title": "Transaction history pagination, filters and ordering",
+      "layer": "API",
+      "priority": "P1",
+      "objective": "History returns the parent's payments newest-first with working filters and validated paging.",
+      "risk": "Parents unable to find or reconcile past payments; unbounded queries.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "Database freshly seeded: call POST /api/v1/dev/reset before logging in (a reset invalidates every access token, so never call it mid-test)."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD).",
+        "Seeded history: 6 payments – pay_seed_0001 FAILED, 0002 SUCCEEDED, 0003 CANCELLED, 0004 SUCCEEDED, 0005 FAILED, 0006 SUCCEEDED."
+      ],
+      "steps": [
+        "Log in as Thandi.",
+        "GET transactions?page=1&page_size=4, then page=2&page_size=4.",
+        "GET transactions?status=FAILED&status=CANCELLED.",
+        "GET transactions?student_id=stu_1002.",
+        "GET transactions?page=0; GET transactions?page_size=101; GET transactions?date_from=2026-12-31&date_to=2026-01-01."
+      ],
+      "expectedResults": [
+        "Step 2: total 6, total_pages 2; page 1 has 4 items, page 2 has 2; no id repeats; items sorted by created_at descending across pages.",
+        "Step 3: total 3 and every status in {FAILED, CANCELLED}.",
+        "Step 4: only pay_seed_0005 and pay_seed_0006 (student_name \"Kabelo Mokoena\").",
+        "Step 5: each returns HTTP 422 VALIDATION_ERROR (date check message: \"date_from must be on or before date_to.\")."
+      ],
+      "references": [
+        "GET /api/v1/transactions"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "AUTH-UI-001",
+      "title": "Parent logs in and lands on their dashboard",
+      "layer": "UI",
+      "priority": "P0",
+      "objective": "The login journey works end to end and establishes a session.",
+      "risk": "Total loss of access to the product.",
+      "preconditions": [
+        "Frontend running at BASE_URL (default http://localhost:5173) and backend running at API_BASE_URL."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD)."
+      ],
+      "steps": [
+        "Open /login.",
+        "Fill email-input and password-input with TEST_USER_* and click login-button.",
+        "Wait for dashboard-page."
+      ],
+      "expectedResults": [
+        "URL is \"/\"; page-title reads \"Hello, Thandi\".",
+        "Header user-name shows \"Thandi Mokoena\"; nav-dashboard is active.",
+        "localStorage key \"feeflow.session\" contains token, expiresAt and parent.id \"par_001\".",
+        "Login button showed \"Signing in…\" and was disabled while the request was in flight."
+      ],
+      "references": [
+        "/login",
+        "/"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "AUTH-UI-002",
+      "title": "Login form shows client validation and server errors",
+      "layer": "UI",
+      "priority": "P1",
+      "objective": "Users get clear feedback for empty, malformed and wrong credentials.",
+      "risk": "Users stuck at login with no explanation; unnecessary API calls.",
+      "preconditions": [
+        "Frontend running at BASE_URL (default http://localhost:5173) and backend running at API_BASE_URL."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD)."
+      ],
+      "steps": [
+        "Open /login and click login-button with empty fields.",
+        "Enter email \"not-an-email\", any password, submit.",
+        "Enter TEST_USER_EMAIL with password \"wrong-password\", submit."
+      ],
+      "expectedResults": [
+        "Step 1: email-error \"Email is required.\" and password-error \"Password is required.\"; no request sent to /auth/login.",
+        "Step 2: email-error \"Enter a valid email address.\"; no request sent.",
+        "Step 3: login-error alert contains \"Invalid email or password.\"; URL stays /login; no feeflow.session in localStorage."
+      ],
+      "references": [
+        "/login"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "AUTH-UI-003",
+      "title": "Protected routes redirect to login and return after authentication; logout ends the session",
+      "layer": "UI",
+      "priority": "P1",
+      "objective": "Deep links survive login and logout fully clears access.",
+      "risk": "Unauthorised access to pages after logout or broken deep links.",
+      "preconditions": [
+        "Frontend running at BASE_URL (default http://localhost:5173) and backend running at API_BASE_URL."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD)."
+      ],
+      "steps": [
+        "With no session, open /transactions.",
+        "Log in on the redirected page.",
+        "Click logout-button.",
+        "Open / again."
+      ],
+      "expectedResults": [
+        "Step 1: redirected to /login?next=%2Ftransactions.",
+        "Step 2: lands on /transactions (transactions-page visible).",
+        "Step 3: redirected to /login; localStorage feeflow.session removed.",
+        "Step 4: redirected to /login?next=%2F; the old token now returns 401 from GET /api/v1/auth/me."
+      ],
+      "references": [
+        "/login",
+        "/transactions"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "AUTH-UI-004",
+      "title": "Expired or revoked session sends the user to login with a message",
+      "layer": "UI",
+      "priority": "P2",
+      "objective": "The UI recovers gracefully when the API rejects a stored token.",
+      "risk": "Broken pages or infinite error loops when a session expires.",
+      "preconditions": [
+        "Frontend running at BASE_URL (default http://localhost:5173) and backend running at API_BASE_URL."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD)."
+      ],
+      "steps": [
+        "Log in and open the dashboard.",
+        "Revoke the token out-of-band (POST /api/v1/auth/logout with the stored token via API request context).",
+        "Reload the dashboard."
+      ],
+      "expectedResults": [
+        "User is redirected to /login and the session-expired alert reads \"Your session has expired. Please log in again.\"",
+        "localStorage feeflow.session is cleared."
+      ],
+      "references": [
+        "/",
+        "/login"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "FEE-UI-001",
+      "title": "Dashboard shows correct outstanding fees, overdue status and totals",
+      "layer": "UI",
+      "priority": "P0",
+      "objective": "Parents see accurate amounts owed per child, overdue items and totals.",
+      "risk": "Parents misled about what they owe or missing overdue fees.",
+      "preconditions": [
+        "Frontend running at BASE_URL (default http://localhost:5173) and backend running at API_BASE_URL.",
+        "Database freshly seeded: call POST /api/v1/dev/reset before logging in (a reset invalidates every access token, so never call it mid-test)."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD).",
+        "Amounts are rendered en-ZA with non-breaking spaces – normalise whitespace before comparing."
+      ],
+      "steps": [
+        "Log in as Thandi.",
+        "Read stat-total-outstanding, stat-overdue and the outstanding-fees-table.",
+        "Select \"Lerato Mokoena\" in outstanding-student-filter."
+      ],
+      "expectedResults": [
+        "stat-total-outstanding shows \"R 24 200,00\" and \"6 unpaid fee(s)\"; stat-overdue shows \"R 1 650,00\" and \"2 overdue fee(s)\".",
+        "Two student cards (stu_1001 Lerato, stu_1002 Kabelo); Kabelo outstanding \"R 14 200,00\", Lerato \"R 10 000,00\".",
+        "Table has 6 rows in due-date order starting fee-row-fee_1006, fee-row-fee_1002; their fee-status-badge has data-status=\"OVERDUE\"; fee_1004 badge data-status=\"PARTIALLY_PAID\"; outstanding-total \"R 24 200,00\".",
+        "After filtering: 3 rows (fee_1002, fee_1003, fee_1004) and outstanding-total \"R 10 000,00\"."
+      ],
+      "references": [
+        "/"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-UI-001",
+      "title": "Pay an outstanding fee in full with a successful card",
+      "layer": "UI",
+      "priority": "P0",
+      "objective": "The primary revenue journey – dashboard → checkout → success – works end to end.",
+      "risk": "Parents unable to pay fees online.",
+      "preconditions": [
+        "Frontend running at BASE_URL (default http://localhost:5173) and backend running at API_BASE_URL.",
+        "Database freshly seeded: call POST /api/v1/dev/reset before logging in (a reset invalidates every access token, so never call it mid-test).",
+        "Simulation settings at .env defaults (DELETE /api/v1/dev/simulation), notably gateway_latency_ms=800, pending_resolution_seconds=8."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD).",
+        "Fee fee_1006 Grade 9 Exam Fee, balance R 450,00 (overdue).",
+        "Card 4242 4242 4242 4242, expiry 12/30, CVC 123, name \"Thandi Mokoena\"."
+      ],
+      "steps": [
+        "Log in; click pay-fee-button in fee-row-fee_1006.",
+        "Keep amount-full-radio selected; click continue-button.",
+        "Fill card-name-input, card-number-input, card-expiry-input, card-cvc-input; click pay-button.",
+        "Wait for the result; click back-to-dashboard."
+      ],
+      "expectedResults": [
+        "Step 2: step-card active; order-summary shows payment-amount \"R 450,00\" and a payment-reference starting \"SF-\".",
+        "Step 3: card-number-input displays \"4242 4242 4242 4242\"; processing-overlay appears and pay-button is disabled while confirming.",
+        "Result page: payment-success visible, detail-amount \"R 450,00\", detail-method \"VISA •••• 4242\", payment-page data-payment-status=\"SUCCEEDED\".",
+        "Dashboard: fee-row-fee_1006 is gone; stat-total-outstanding \"R 23 750,00\"; stat-overdue \"R 1 200,00\" and \"1 overdue fee(s)\"."
+      ],
+      "references": [
+        "/",
+        "/fees/:feeId/pay",
+        "/payments/:paymentId"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-UI-002",
+      "title": "Partial payment with amount validation updates the fee balance",
+      "layer": "UI",
+      "priority": "P1",
+      "objective": "Custom amounts are validated client-side and partial payments reduce the balance correctly.",
+      "risk": "Overpayment or wrong amounts charged from free-text input.",
+      "preconditions": [
+        "Frontend running at BASE_URL (default http://localhost:5173) and backend running at API_BASE_URL.",
+        "Database freshly seeded: call POST /api/v1/dev/reset before logging in (a reset invalidates every access token, so never call it mid-test).",
+        "Simulation settings at .env defaults (DELETE /api/v1/dev/simulation), notably gateway_latency_ms=800, pending_resolution_seconds=8."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD).",
+        "Fee fee_1003 Term 3 Tuition (Lerato), balance R 8 450,00.",
+        "Success card 4242 4242 4242 4242."
+      ],
+      "steps": [
+        "Open /fees/fee_1003/pay; choose amount-custom-radio.",
+        "Enter \"9000\" and continue; then \"abc\"; then \"0.50\".",
+        "Enter \"1500.50\" and continue; pay with the success card.",
+        "Open /fees/fee_1003."
+      ],
+      "expectedResults": [
+        "\"9000\" → amount-error \"Amount cannot exceed the balance of R 8 450,00.\"; \"abc\" → \"Enter a valid amount, e.g. 1500.00\"; \"0.50\" → \"Minimum partial payment is R 1,00.\"; no payment created for any of these.",
+        "Valid amount: payment-amount \"R 1 500,50\" and pay-button \"Pay R 1 500,50\"; result payment-success.",
+        "Fee page: fee-amount-paid \"R 1 500,50\", fee-balance \"R 6 949,50\", status badge \"Partially Paid\"."
+      ],
+      "references": [
+        "/fees/:feeId/pay",
+        "/fees/:feeId"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-UI-003",
+      "title": "Declined card shows the failure state and allows a fresh attempt",
+      "layer": "UI",
+      "priority": "P0",
+      "objective": "Declines are communicated clearly and the parent can try again without side effects.",
+      "risk": "Parents believing a declined payment succeeded, or being unable to retry.",
+      "preconditions": [
+        "Frontend running at BASE_URL (default http://localhost:5173) and backend running at API_BASE_URL.",
+        "Simulation settings at .env defaults (DELETE /api/v1/dev/simulation), notably gateway_latency_ms=800, pending_resolution_seconds=8."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD).",
+        "Any unpaid fee (e.g. fee_1008 Soccer Academy); custom amount 10.",
+        "Declined card 4000 0000 0000 0002."
+      ],
+      "steps": [
+        "Note the fee balance on /fees/{feeId}.",
+        "Pay with the declined card.",
+        "Click try-again-button."
+      ],
+      "expectedResults": [
+        "payment-failure visible; failure-message \"The card was declined by the issuing bank.\"; payment-status-badge data-status \"FAILED\"; detail-failure includes \"CARD_DECLINED\".",
+        "try-again-button navigates to /fees/{feeId}/pay with step 1 (amount) active and a new payment flow.",
+        "Fee balance unchanged."
+      ],
+      "references": [
+        "/payments/:paymentId",
+        "/fees/:feeId/pay"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-UI-004",
+      "title": "Pending payment shows the pending state and auto-updates to success",
+      "layer": "UI",
+      "priority": "P1",
+      "objective": "Async outcomes are communicated and resolved through polling without user action.",
+      "risk": "Parents re-paying because the UI never shows the final outcome.",
+      "preconditions": [
+        "Frontend running at BASE_URL (default http://localhost:5173) and backend running at API_BASE_URL.",
+        "Simulation settings at .env defaults (DELETE /api/v1/dev/simulation), notably gateway_latency_ms=800, pending_resolution_seconds=8."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD).",
+        "Any unpaid fee; custom amount 10.",
+        "Async-success card 4000 0000 0000 2024 (settles after pending_resolution_seconds = 8)."
+      ],
+      "steps": [
+        "Pay with the async card.",
+        "Observe the result page without reloading."
+      ],
+      "expectedResults": [
+        "payment-pending appears first with text \"Payment pending\" and a spinner; data-payment-status \"PROCESSING\".",
+        "Within 15 s payment-success replaces it (no reload); data-payment-status \"SUCCEEDED\".",
+        "Polling stops after the final state (no further /status requests)."
+      ],
+      "references": [
+        "/payments/:paymentId",
+        "GET /api/v1/payments/{payment_id}/status"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-UI-005",
+      "title": "Gateway error is shown as retryable and a retry succeeds",
+      "layer": "UI",
+      "priority": "P1",
+      "objective": "Transient provider errors keep the parent in checkout with a clear, recoverable message.",
+      "risk": "Dead-end checkout after transient errors, causing abandoned payments.",
+      "preconditions": [
+        "Frontend running at BASE_URL (default http://localhost:5173) and backend running at API_BASE_URL.",
+        "Simulation settings at .env defaults (DELETE /api/v1/dev/simulation), notably gateway_latency_ms=800, pending_resolution_seconds=8."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD).",
+        "Any unpaid fee; custom amount 10.",
+        "Cards 4000 0000 0000 0119 then 4242 4242 4242 4242."
+      ],
+      "steps": [
+        "Pay with 4000 0000 0000 0119.",
+        "Replace the card number with 4242 4242 4242 4242 and click pay-button."
+      ],
+      "expectedResults": [
+        "Step 1: confirm-error alert titled \"Payment provider unavailable\" containing \"Your card was not charged.\"; user stays on the card step; pay-button enabled.",
+        "Step 2: payment-success; payment details show \"Confirmation attempts\" 2."
+      ],
+      "references": [
+        "/fees/:feeId/pay"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-UI-006",
+      "title": "Card form blocks submission until all fields are valid",
+      "layer": "UI",
+      "priority": "P1",
+      "objective": "Client-side card validation prevents bad requests and explains each problem.",
+      "risk": "Confusing failures or wasted gateway calls from invalid card input.",
+      "preconditions": [
+        "Frontend running at BASE_URL (default http://localhost:5173) and backend running at API_BASE_URL."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD).",
+        "Any unpaid fee; reach the card step (payment created, PENDING)."
+      ],
+      "steps": [
+        "Click pay-button with all card fields empty.",
+        "Enter number 4242 4242 4242 4241 and blur.",
+        "Enter expiry 01/20 and blur.",
+        "Track network requests during steps 1–3."
+      ],
+      "expectedResults": [
+        "Step 1: card-name-error \"Enter the name on the card.\", card-number-error \"Enter a card number.\", card-expiry-error \"Enter expiry as MM/YY.\", card-cvc-error \"CVC must be 3 or 4 digits.\".",
+        "Step 2: card-number-error \"Card number is invalid.\".",
+        "Step 3: card-expiry-error \"Card has expired.\".",
+        "Step 4: no POST to /api/v1/payments/{id}/confirm was sent."
+      ],
+      "references": [
+        "/fees/:feeId/pay"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-UI-007",
+      "title": "Cancel a payment from checkout with confirmation",
+      "layer": "UI",
+      "priority": "P2",
+      "objective": "Parents can abandon checkout safely; cancelled payments are visible as such.",
+      "risk": "Orphaned pending payments or accidental cancellation without confirmation.",
+      "preconditions": [
+        "Frontend running at BASE_URL (default http://localhost:5173) and backend running at API_BASE_URL."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD).",
+        "Any unpaid fee."
+      ],
+      "steps": [
+        "Reach the card step; click cancel-payment-button.",
+        "Click keep-payment-button; click cancel-payment-button again, then confirm-cancel-button."
+      ],
+      "expectedResults": [
+        "cancel-confirmation appears inline; keep-payment-button dismisses it without cancelling.",
+        "After confirming: payment-cancelled with \"Payment cancelled\" and \"No money was taken.\"; badge data-status \"CANCELLED\".",
+        "The payment appears in /transactions with status Cancelled."
+      ],
+      "references": [
+        "/fees/:feeId/pay",
+        "/payments/:paymentId"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "TXN-UI-001",
+      "title": "A completed payment appears in transaction history with matching details",
+      "layer": "UI",
+      "priority": "P0",
+      "objective": "Payments made in the UI are traceable in history and their detail page.",
+      "risk": "Parents unable to prove or reconcile a payment.",
+      "preconditions": [
+        "Frontend running at BASE_URL (default http://localhost:5173) and backend running at API_BASE_URL.",
+        "Simulation settings at .env defaults (DELETE /api/v1/dev/simulation), notably gateway_latency_ms=800, pending_resolution_seconds=8."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD).",
+        "Make one successful payment of R 10,00 on any unpaid fee and record its payment-reference."
+      ],
+      "steps": [
+        "Complete a payment and note the reference.",
+        "Open nav-transactions.",
+        "Click transaction-link in the first row."
+      ],
+      "expectedResults": [
+        "First row (newest first) shows the same reference, fee, student, \"VISA •••• 4242\", badge \"Successful\" and amount \"R 10,00\".",
+        "Detail page: detail-reference equals the reference; payment-timeline has 3 timeline-event items with data-event-type PAYMENT_CREATED, CONFIRMATION_SUBMITTED, PAYMENT_SUCCEEDED."
+      ],
+      "references": [
+        "/transactions",
+        "/payments/:paymentId"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "TXN-UI-002",
+      "title": "Transaction filters and pagination persist in the URL",
+      "layer": "UI",
+      "priority": "P1",
+      "objective": "History filtering and paging are correct and deep-linkable.",
+      "risk": "Parents seeing wrong or missing transactions when filtering.",
+      "preconditions": [
+        "Frontend running at BASE_URL (default http://localhost:5173) and backend running at API_BASE_URL.",
+        "Database freshly seeded: call POST /api/v1/dev/reset before logging in (a reset invalidates every access token, so never call it mid-test)."
+      ],
+      "testData": [
+        "Primary account thandi.mokoena@example.com (TEST_USER_EMAIL / TEST_USER_PASSWORD).",
+        "Seeded history of 6 payments (2 FAILED)."
+      ],
+      "steps": [
+        "Open /transactions?size=5.",
+        "Click next-page.",
+        "Select Failed in filter-status; reload the page.",
+        "Set filter-date-from 2026-12-31 and filter-date-to 2026-01-01.",
+        "Click clear-filters."
+      ],
+      "expectedResults": [
+        "Step 1: page-indicator \"Page 1 of 2\", pagination-summary \"Showing 1–5 of 6\".",
+        "Step 2: URL contains page=2; \"Page 2 of 2\", \"Showing 6–6 of 6\".",
+        "Step 3: URL contains status=FAILED and page param removed; 2 rows, all payment-status-badge data-status=\"FAILED\"; filters survive reload.",
+        "Step 4: date-range-error reads: \"From\" date must be on or before the \"To\" date. – and no table is shown.",
+        "Step 5: URL has no filter params; all 6 transactions listed (default page size 10)."
+      ],
+      "references": [
+        "/transactions"
+      ],
+      "automationTarget": "Playwright",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "FEE-PERF-001",
+      "title": "Read-path baseline smoke (1 VU)",
+      "layer": "Performance",
+      "priority": "P1",
+      "objective": "Establish baseline latency for every read endpoint before applying load.",
+      "risk": "Load results are uninterpretable without a known single-user baseline.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "LOG_LEVEL=WARNING in backend/.env for load runs (restart backend).",
+        "Fresh seed (POST /api/v1/dev/reset) before the run; SEED_LOAD_TEST_USERS ≥ number of VUs."
+      ],
+      "testData": [
+        "Account loadtest001; TEST_USER_PASSWORD via env."
+      ],
+      "steps": [
+        "setup(): log in once, return the token and one fee id from GET /fees/outstanding.",
+        "Scenario: 1 VU, 1 minute, each iteration GETs health, auth/me, dashboard, students, fees/outstanding, fees/{id}, transactions?page_size=10 with 1 s think time.",
+        "Tag every request with name (e.g. \"GET /fees/{id}\").",
+        "Export the summary to results/FEE-PERF-001.json."
+      ],
+      "expectedResults": [
+        "Checks: all responses 200 (checks rate == 100%).",
+        "Thresholds: http_req_failed rate == 0; http_req_duration p(95) < 200 ms per endpoint tag.",
+        "Recorded p50/p95 per endpoint used as the baseline in the notes field."
+      ],
+      "references": [
+        "GET /api/v1/fees/outstanding",
+        "GET /api/v1/dashboard",
+        "GET /api/v1/transactions"
+      ],
+      "automationTarget": "k6",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "FEE-PERF-002",
+      "title": "Fee lookup under sustained load",
+      "layer": "Performance",
+      "priority": "P0",
+      "objective": "Fee and dashboard reads stay fast at expected peak browsing traffic.",
+      "risk": "Slow fee pages during fee deadlines drive abandonment and support calls.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "LOG_LEVEL=WARNING in backend/.env for load runs (restart backend).",
+        "Fresh seed (POST /api/v1/dev/reset) before the run; SEED_LOAD_TEST_USERS ≥ number of VUs."
+      ],
+      "testData": [
+        "Accounts loadtest001…loadtest050 (one per VU), logged in once in setup()."
+      ],
+      "steps": [
+        "setup(): log in all 50 accounts; return tokens.",
+        "Scenario browse_fees: ramping-arrival-rate 0 → 50 iterations/s over 1 min, hold 50/s for 5 min, ramp down 30 s; preAllocatedVUs 50, maxVUs 100.",
+        "Iteration: GET fees/outstanding, then GET fees/{first item id}, then GET dashboard (token chosen by VU index).",
+        "Check status 200 and that fees/outstanding count equals items.length."
+      ],
+      "expectedResults": [
+        "Thresholds pass: http_req_failed < 1%; p(95) < 500 ms and p(99) < 1000 ms for name:GET /fees/outstanding and name:GET /dashboard; checks rate > 99%.",
+        "dropped_iterations == 0 (the target rate was sustained).",
+        "Exit code 0."
+      ],
+      "references": [
+        "GET /api/v1/fees/outstanding",
+        "GET /api/v1/fees/{fee_id}",
+        "GET /api/v1/dashboard"
+      ],
+      "automationTarget": "k6",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "AUTH-PERF-001",
+      "title": "Login throughput at a morning peak",
+      "layer": "Performance",
+      "priority": "P1",
+      "objective": "Login (PBKDF2-hashed) sustains a realistic burst of parents signing in.",
+      "risk": "CPU-bound password hashing becomes the bottleneck and blocks access at peak.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "LOG_LEVEL=WARNING in backend/.env for load runs (restart backend).",
+        "Fresh seed (POST /api/v1/dev/reset) before the run; SEED_LOAD_TEST_USERS ≥ number of VUs."
+      ],
+      "testData": [
+        "Accounts loadtest001…loadtest050 cycled per iteration."
+      ],
+      "steps": [
+        "Scenario: constant-arrival-rate 10 logins/s for 2 min (preAllocatedVUs 20, maxVUs 60).",
+        "Iteration: POST auth/login for loadTestEmail(((iter) % 50) + 1); check 200 and access_token present.",
+        "Tag requests name:POST /auth/login."
+      ],
+      "expectedResults": [
+        "Thresholds: http_req_failed < 1%; p(95) < 1000 ms for name:POST /auth/login; checks > 99%.",
+        "Record the max sustainable rate in notes if thresholds fail (step the rate down 10 → 5/s)."
+      ],
+      "references": [
+        "POST /api/v1/auth/login"
+      ],
+      "automationTarget": "k6",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-PERF-001",
+      "title": "Payment creation and confirmation throughput",
+      "layer": "Performance",
+      "priority": "P0",
+      "objective": "The write path (create + confirm) meets latency and correctness targets at expected payment volume.",
+      "risk": "Payments failing or timing out at fee deadlines; SQLite write contention.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "LOG_LEVEL=WARNING in backend/.env for load runs (restart backend).",
+        "Fresh seed (POST /api/v1/dev/reset) before the run; SEED_LOAD_TEST_USERS ≥ number of VUs.",
+        "Simulation settings at .env defaults (DELETE /api/v1/dev/simulation), notably gateway_latency_ms=800, pending_resolution_seconds=8."
+      ],
+      "testData": [
+        "Accounts loadtest001…loadtest050 (one per VU, so no PAYMENT_IN_PROGRESS conflicts); amount_cents 100; success card 4242424242424242.",
+        "Each iteration uses crypto.randomUUID() as Idempotency-Key."
+      ],
+      "steps": [
+        "setup(): log in all accounts and resolve each account's Term 3 Tuition fee id.",
+        "Scenario pay_fee: ramping-arrival-rate 1 → 10 iterations/s over 1 min, hold 10/s for 4 min; preAllocatedVUs 50, maxVUs 50.",
+        "Iteration: POST payments (check 201, status PENDING) then POST payments/{id}/confirm (check 200, status SUCCEEDED).",
+        "Tag requests name:POST /payments and name:POST /payments/{id}/confirm."
+      ],
+      "expectedResults": [
+        "Thresholds: http_req_failed < 1%; p(95) < 500 ms for name:POST /payments; p(95) < 1500 ms for confirm (includes 800 ms simulated gateway latency); checks > 99%.",
+        "After the run: for any VU account, fee amount_paid_cents increased by exactly 100 × that account's successful iterations.",
+        "dropped_iterations == 0."
+      ],
+      "references": [
+        "POST /api/v1/payments",
+        "POST /api/v1/payments/{payment_id}/confirm"
+      ],
+      "automationTarget": "k6",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-PERF-002",
+      "title": "Idempotency holds under a concurrent duplicate-request storm",
+      "layer": "Performance",
+      "priority": "P0",
+      "objective": "Many simultaneous retries with one Idempotency-Key create exactly one payment.",
+      "risk": "Duplicate charges caused by client retry storms or double-submits at scale.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "LOG_LEVEL=WARNING in backend/.env for load runs (restart backend).",
+        "Fresh seed (POST /api/v1/dev/reset) before the run; SEED_LOAD_TEST_USERS ≥ number of VUs."
+      ],
+      "testData": [
+        "Single account loadtest002; one shared key generated in setup(); body {fee_id: Term 3 Tuition, amount_cents: 100}."
+      ],
+      "steps": [
+        "setup(): log in, resolve fee id, generate key K, record GET transactions?fee_id total (T0).",
+        "Scenario: per-vu-iterations, 100 VUs × 1 iteration, all POST payments with key K and identical body at once.",
+        "Count responses by status with custom Counters (created_201, replayed_200) and collect returned ids.",
+        "teardown(): GET transactions?fee_id total (T1)."
+      ],
+      "expectedResults": [
+        "Thresholds: created_201 count == 1; http_req_failed == 0 (expected statuses 200/201).",
+        "Every response carries the same payment id; replays carry Idempotent-Replayed: true.",
+        "T1 == T0 + 1.",
+        "p(95) latency recorded; no 5xx or \"database is locked\" errors in backend log."
+      ],
+      "references": [
+        "POST /api/v1/payments"
+      ],
+      "automationTarget": "k6",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-PERF-003",
+      "title": "Realistic peak traffic mix at a fee deadline",
+      "layer": "Performance",
+      "priority": "P1",
+      "objective": "The system handles a realistic mix of browsing, paying and status polling at peak.",
+      "risk": "Writes degrading reads (or vice versa) only visible under mixed traffic.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "LOG_LEVEL=WARNING in backend/.env for load runs (restart backend).",
+        "Fresh seed (POST /api/v1/dev/reset) before the run; SEED_LOAD_TEST_USERS ≥ number of VUs.",
+        "Simulation settings at .env defaults (DELETE /api/v1/dev/simulation), notably gateway_latency_ms=800, pending_resolution_seconds=8."
+      ],
+      "testData": [
+        "Accounts loadtest001…loadtest050; paying VUs use distinct accounts from browsing VUs where possible."
+      ],
+      "steps": [
+        "Scenario browse (70%): ramping-arrival-rate to 35 it/s – dashboard, fees/outstanding, transactions.",
+        "Scenario pay (20%): ramping-arrival-rate to 10 it/s – create + confirm (mix: 90% 4242…, 10% 4000000000000002).",
+        "Scenario poll (10%): constant-arrival-rate 5 it/s – create a payment, confirm with async card 4000000000002024 (expect 202), then poll GET payments/{id}/status every retry_after_ms until is_final (k6 VUs share no state, so each iteration polls its own payment).",
+        "Profile: 2 min ramp, 6 min hold at peak, 1 min spike to 1.5× peak, 1 min ramp down."
+      ],
+      "expectedResults": [
+        "Thresholds per scenario tag: browse p(95) < 500 ms; pay create p(95) < 600 ms; confirm p(95) < 1600 ms; poll p(95) < 300 ms; http_req_failed < 1% (declines are 200, so they don't count).",
+        "Decline checks: FAILED with CARD_DECLINED for decline-card iterations.",
+        "No dropped_iterations during the hold phase; any degradation during the spike recorded in notes."
+      ],
+      "references": [
+        "GET /api/v1/dashboard",
+        "POST /api/v1/payments",
+        "GET /api/v1/payments/{payment_id}/status"
+      ],
+      "automationTarget": "k6",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-PERF-004",
+      "title": "Resilience to degraded gateway latency and intermittent gateway errors",
+      "layer": "Performance",
+      "priority": "P1",
+      "objective": "A slow, flaky gateway slows only payment confirmation – reads stay healthy and errors are bounded.",
+      "risk": "Gateway degradation exhausting server resources and taking down the whole app.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "LOG_LEVEL=WARNING in backend/.env for load runs (restart backend).",
+        "Fresh seed (POST /api/v1/dev/reset) before the run; SEED_LOAD_TEST_USERS ≥ number of VUs."
+      ],
+      "testData": [
+        "setup(): PUT dev/simulation {\"gateway_latency_ms\": 3000, \"gateway_error_every_n\": 10}; teardown(): DELETE dev/simulation.",
+        "Accounts loadtest001…loadtest050."
+      ],
+      "steps": [
+        "Scenario pay: constant-arrival-rate 5 it/s for 3 min – create + confirm with 4242…; declare 502 as expected via http.setResponseCallback(http.expectedStatuses(200, 201, 502)).",
+        "On 502: check error.code == GATEWAY_ERROR and payment back to PENDING, then cancel it.",
+        "Scenario browse in parallel: constant-arrival-rate 20 it/s GET fees/outstanding."
+      ],
+      "expectedResults": [
+        "Exactly 10% of confirmations (every 10th) return 502; all others SUCCEEDED (custom Rate metric within 9–11%).",
+        "Confirm p(95) between 3000 and 4000 ms.",
+        "Thresholds: browse p(95) < 500 ms (unaffected by gateway latency); http_req_failed < 1% with the expected statuses.",
+        "No payment left in PROCESSING after the run (verify via GET transactions?status=PROCESSING per account)."
+      ],
+      "references": [
+        "POST /api/v1/payments/{payment_id}/confirm",
+        "PUT /api/v1/dev/simulation"
+      ],
+      "automationTarget": "k6",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    },
+    {
+      "id": "PAY-PERF-005",
+      "title": "Soak: steady moderate load for 30 minutes",
+      "layer": "Performance",
+      "priority": "P2",
+      "objective": "Detect latency drift, resource leaks or database growth effects over time.",
+      "risk": "Gradual degradation (e.g. growing payment tables slowing history queries) during a long collection window.",
+      "preconditions": [
+        "Backend running at API_BASE_URL (default http://127.0.0.1:8000/api/v1) with dev endpoints enabled (APP_ENV=development).",
+        "LOG_LEVEL=WARNING in backend/.env for load runs (restart backend).",
+        "Fresh seed (POST /api/v1/dev/reset) before the run; SEED_LOAD_TEST_USERS ≥ number of VUs.",
+        "Simulation settings at .env defaults (DELETE /api/v1/dev/simulation), notably gateway_latency_ms=800, pending_resolution_seconds=8."
+      ],
+      "testData": [
+        "Accounts loadtest001…loadtest050."
+      ],
+      "steps": [
+        "Scenario: constant-arrival-rate 10 it/s for 30 min mixing 80% reads (fees/outstanding, transactions) and 20% create + confirm.",
+        "Export results/PAY-PERF-005.json; compare first-5-minute vs last-5-minute p95 using time-sliced tags or output to CSV (--out csv=results/PAY-PERF-005.csv)."
+      ],
+      "expectedResults": [
+        "Thresholds: http_req_failed < 1%; overall p(95) < 600 ms.",
+        "p(95) in the last 5 minutes is within 20% of the first 5 minutes.",
+        "Backend process memory stable (observe Task Manager / Activity Monitor; record in notes)."
+      ],
+      "references": [
+        "GET /api/v1/transactions",
+        "POST /api/v1/payments"
+      ],
+      "automationTarget": "k6",
+      "automationStatus": "planned",
+      "scriptPath": "",
+      "latestResult": "not run",
+      "lastExecuted": null,
+      "notes": "",
+      "updatedAt": "2026-10-11T14:46:17Z"
+    }
+  ]
+}

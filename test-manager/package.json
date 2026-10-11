@@ -1,0 +1,14 @@
+{
+  "name": "test-manager",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Local test catalogue for the FeeFlow testing workspace (no dependencies)",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "validate": "node scripts/validate.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
