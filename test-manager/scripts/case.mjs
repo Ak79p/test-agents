@@ -3,16 +3,17 @@
 // agents and handy for humans. Works whether or not the web server is running.
 //
 //   node test-manager/scripts/case.mjs show AUTH-API-001          full case as JSON
+//   node test-manager/scripts/case.mjs placement AUTH-API-001     the required file, project, tags and run command
 //   node test-manager/scripts/case.mjs list [--layer API] [--status planned] [--result "not run"]
 //   node test-manager/scripts/case.mjs update AUTH-API-001 \
 //        --automation-status automated \
-//        --script-path tests/playwright/api/auth/AUTH-API-001.spec.ts \
+//        --script-path tests/playwright/api/auth-api.spec.ts \
 //        --result passed --executed today \
 //        --note "npx playwright test --grep AUTH-API-001 → 1 passed"
 //
 // Exit codes: 0 ok · 1 usage/validation error · 2 id not found · 3 id duplicated
 
-import { ID_PATTERN, validateTest } from '../lib/catalogue.mjs';
+import { ID_PATTERN, placementFor, validateTest } from '../lib/catalogue.mjs';
 import { mutateCatalogue, readCatalogue } from '../lib/store.mjs';
 
 const UPDATE_FLAGS = {
@@ -71,6 +72,19 @@ async function show(id) {
   console.log(JSON.stringify(resolveCase(doc, id), null, 2));
 }
 
+// The only source for where a case's automation lives; never choose a path by judgment.
+async function placement(id) {
+  const t = resolveCase(await readCatalogue(), id);
+  const p = placementFor(t.id);
+  if (t.layer === 'Performance') {
+    console.log(JSON.stringify({ id: t.id, layer: t.layer, ...p, command: `cd tests/k6 && k6 run --vus 1 --iterations 1 scripts/${t.id}.js` }, null, 2));
+    return;
+  }
+  const project = t.layer === 'API' ? 'api' : /@mobile/.test(t.title) ? 'ui-mobile' : 'ui-chromium';
+  const file = p.scriptPath.replace('tests/playwright/', '');
+  console.log(JSON.stringify({ id: t.id, layer: t.layer, ...p, project, command: `cd tests/playwright && npx playwright test ${file} --project=${project} --grep ${t.id} --reporter=list` }, null, 2));
+}
+
 async function list(args) {
   const flags = parseFlags(args);
   const doc = await readCatalogue();
@@ -114,6 +128,7 @@ async function update(id, args) {
 
 const [command, id, ...rest] = process.argv.slice(2);
 if (command === 'show' && id) await show(id);
+else if (command === 'placement' && id) await placement(id);
 else if (command === 'list') await list([id, ...rest].filter((x) => x !== undefined));
 else if (command === 'update' && id) await update(id, rest);
-else fail('Usage: case.mjs show <ID> | list [--layer L] [--status S] [--result R] | update <ID> [--automation-status S] [--script-path P] [--result R] [--executed YYYY-MM-DD|today|none] [--notes TEXT] [--note TEXT]');
+else fail('Usage: case.mjs show <ID> | placement <ID> | list [--layer L] [--status S] [--result R] | update <ID> [--automation-status S] [--script-path P] [--result R] [--executed YYYY-MM-DD|today|none] [--notes TEXT] [--note TEXT]');

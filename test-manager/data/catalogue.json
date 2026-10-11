@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "application": "FeeFlow school-fee payments (local practice app)",
-  "updatedAt": "2026-10-11T14:46:17Z",
+  "updatedAt": "2026-10-11T19:15:32.561Z",
   "tests": [
     {
       "id": "AUTH-API-001",
@@ -272,12 +272,12 @@
         "GET /api/v1/payments/{payment_id}"
       ],
       "automationTarget": "Playwright",
-      "automationStatus": "planned",
-      "scriptPath": "",
-      "latestResult": "not run",
-      "lastExecuted": null,
-      "notes": "",
-      "updatedAt": "2026-10-11T14:46:17Z"
+      "automationStatus": "automated",
+      "scriptPath": "tests/playwright/api/pay-api.spec.ts",
+      "latestResult": "passed",
+      "lastExecuted": "2026-10-12",
+      "notes": "[2026-10-12 00:45 UTC+05:30] PASSED via: cd tests/playwright && npx playwright test api/pay-api.spec.ts --project=api --grep PAY-API-001 --reporter=list | 1 passed (794ms); repeat-each=3: 3 passed (2.2s)",
+      "updatedAt": "2026-10-11T19:15:32.561Z"
     },
     {
       "id": "PAY-API-002",
@@ -882,12 +882,12 @@
         "/"
       ],
       "automationTarget": "Playwright",
-      "automationStatus": "planned",
-      "scriptPath": "",
-      "latestResult": "not run",
-      "lastExecuted": null,
-      "notes": "",
-      "updatedAt": "2026-10-11T14:46:17Z"
+      "automationStatus": "automated",
+      "scriptPath": "tests/playwright/ui/auth-ui.spec.ts",
+      "latestResult": "passed",
+      "lastExecuted": "2026-10-11",
+      "notes": "[2026-10-11 23:52 UTC+05:30] PASSED via: cd tests/playwright && npm run test:ui | 3 passed (3.0s) (consolidated into ui/auth-ui.spec.ts, tags @ui @auth)",
+      "updatedAt": "2026-10-11T18:22:10.410Z"
     },
     {
       "id": "AUTH-UI-002",
@@ -916,12 +916,12 @@
         "/login"
       ],
       "automationTarget": "Playwright",
-      "automationStatus": "planned",
-      "scriptPath": "",
-      "latestResult": "not run",
-      "lastExecuted": null,
-      "notes": "",
-      "updatedAt": "2026-10-11T14:46:17Z"
+      "automationStatus": "automated",
+      "scriptPath": "tests/playwright/ui/auth-ui.spec.ts",
+      "latestResult": "passed",
+      "lastExecuted": "2026-10-11",
+      "notes": "[2026-10-11 23:28 UTC+05:30] PASSED via: cd tests/playwright && npx playwright test ui/auth/AUTH-UI-002.spec.ts --project=ui-chromium --reporter=list | 1 passed (1.6s)\n[2026-10-11 23:52 UTC+05:30] PASSED via: cd tests/playwright && npm run test:ui | 3 passed (3.0s) (consolidated into ui/auth-ui.spec.ts, tags @ui @auth)",
+      "updatedAt": "2026-10-11T18:22:10.523Z"
     },
     {
       "id": "AUTH-UI-003",
@@ -953,12 +953,12 @@
         "/transactions"
       ],
       "automationTarget": "Playwright",
-      "automationStatus": "planned",
-      "scriptPath": "",
-      "latestResult": "not run",
-      "lastExecuted": null,
-      "notes": "",
-      "updatedAt": "2026-10-11T14:46:17Z"
+      "automationStatus": "automated",
+      "scriptPath": "tests/playwright/ui/auth-ui.spec.ts",
+      "latestResult": "passed",
+      "lastExecuted": "2026-10-11",
+      "notes": "[2026-10-11 23:34 UTC+05:30] PASSED via: cd tests/playwright && npx playwright test hybrid/auth/AUTH-UI-003.spec.ts --project=hybrid --reporter=list | 1 passed (1.8s)\n[2026-10-11 23:52 UTC+05:30] PASSED via: cd tests/playwright && npm run test:ui | 3 passed (3.0s) (consolidated into ui/auth-ui.spec.ts, tags @ui @auth)",
+      "updatedAt": "2026-10-11T18:22:10.611Z"
     },
     {
       "id": "AUTH-UI-004",
@@ -987,12 +987,12 @@
         "/login"
       ],
       "automationTarget": "Playwright",
-      "automationStatus": "planned",
-      "scriptPath": "",
-      "latestResult": "not run",
-      "lastExecuted": null,
-      "notes": "",
-      "updatedAt": "2026-10-11T14:46:17Z"
+      "automationStatus": "automated",
+      "scriptPath": "tests/playwright/ui/auth-ui.spec.ts",
+      "latestResult": "passed",
+      "lastExecuted": "2026-10-12",
+      "notes": "[2026-10-12 00:00 UTC+05:30] PASSED via: cd tests/playwright && npx playwright test ui/auth-ui.spec.ts --project=ui-chromium --grep AUTH-UI-004 --reporter=list | 1 passed (1.6s)",
+      "updatedAt": "2026-10-11T18:30:30.999Z"
     },
     {
       "id": "FEE-UI-001",

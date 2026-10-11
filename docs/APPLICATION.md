@@ -47,7 +47,7 @@ claude                         # in the repo root; /mcp should show playwright c
 1. Pick a case in the catalogue UI (or `node test-manager/scripts/case.mjs list --status planned`).
 2. Optionally plan first: **`Plan AUTH-API-001`** writes `tests/plans/AUTH-API-001.md` (framework changes, step→code, assertions). Review it and mark it APPROVED.
 3. In Claude Code, type **`Automate AUTH-API-001`** (also: `Automate PAY-API-003 and run it`, `Review AUTH-API-001 without implementing it`, `Debug AUTH-API-001`, `Implement the k6 test for FEE-PERF-001`).
-4. Claude reads the exact case (and the approved plan, if any), explores the app (MCP for UI), writes `tests/playwright/<api|ui|hybrid>/<area>/<ID>.spec.ts`, runs it, records status, path, result and notes in the catalogue, and reports the files and the exact command.
+4. Claude reads the exact case (and the approved plan, if any), explores the app (MCP for UI), adds the test to the file derived from its ID (`case.mjs placement <ID>`, e.g. `tests/playwright/ui/auth-ui.spec.ts`), runs it, records status, path, result and notes in the catalogue, and reports the files and the exact command.
 5. Re-run any time without Claude: `cd tests/playwright && npx playwright test --grep AUTH-API-001`.
 
 Unknown IDs are never guessed: Claude stops and asks. Rules: [CLAUDE.md](../CLAUDE.md). Performance dashboards and CI workflows are out of scope.

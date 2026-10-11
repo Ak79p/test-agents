@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "validate": "node scripts/validate.mjs"
+    "validate": "node scripts/validate.mjs",
+    "export:md": "node scripts/export-md.mjs"
   },
   "engines": {
     "node": ">=18"

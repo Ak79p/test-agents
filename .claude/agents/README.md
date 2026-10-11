@@ -1,6 +1,6 @@
 # Agents
 
-Each agent has one job, a fixed input, a fixed output and hard boundaries. The orchestrator is the main Claude session following [CLAUDE.md](../../CLAUDE.md); setup and troubleshooting are in [../README.md](../README.md).
+Each agent has one job, a fixed input, a fixed output and hard boundaries. The orchestrator is the main Claude session following [CLAUDE.md](../../CLAUDE.md); setup and troubleshooting are in [../README.md](../README.md). The agents run only in **thorough mode** (`Automate thorough <ID>`, Plan, Review, Debug, Update, k6). Plain `Automate <ID>` uses fast mode in the main session without subagents.
 
 ## test-case-reader
 * **Purpose:** turn an ID into the authoritative requirement.
@@ -26,7 +26,7 @@ Each agent has one job, a fixed input, a fixed output and hard boundaries. The o
 ## test-automation-engineer
 * **Purpose:** write exactly one permanent test.
 * **Input:** reader block (verbatim), explorer findings, TYPE/TARGET.
-* **Does:** creates `tests/playwright/{api|ui|hybrid}/<area>/<ID>.spec.ts` (or `tests/k6/scripts/<ID>.js` when k6 is explicitly requested). Title starts with the ID; one `test.step` per catalogue step; `request` for API, `page` + test-id/role locators for UI, a separate API context for hybrid; config via `config/env.ts`; spec-exact assertions; preconditions and cleanup honoured; no sleeps. Self-checks with `--list` and `npm run typecheck`.
+* **Does:** adds the test to the file given by `case.mjs placement <ID>` (`tests/playwright/{api|ui}/<area>-<kind>.spec.ts`, or `tests/k6/scripts/<ID>.js` when k6 is explicitly requested). Title starts with the ID and carries the native tags (`@ui`/`@api` + area); one `test.step` per catalogue step; `request` for API, `page` + test-id/role locators for UI, a separate API context for hybrid; config via `config/env.ts`; spec-exact assertions; preconditions and cleanup honoured; no sleeps. Self-checks with `--list` and `npm run typecheck`.
 * **Output:** `STATUS`, files, project, exact run command, AC → assertion mapping, assumptions, blockers.
 * **Boundaries:** no other cases, no app changes, no unrelated refactors, no hard-coded secrets; shared fixtures only when actually reused.
 

@@ -5,10 +5,10 @@
   "description": "Playwright (TypeScript) UI and API tests for the FeeFlow school-fee app",
   "scripts": {
     "test": "playwright test",
-    "test:api": "playwright test --project=api",
-    "test:ui": "playwright test --project=ui-chromium",
+    "test:api": "playwright test --project=api --grep @api --pass-with-no-tests",
+    "test:ui": "playwright test --project=ui-chromium --project=ui-mobile --grep @ui",
     "test:mobile": "playwright test --project=ui-mobile",
-    "test:hybrid": "playwright test --project=hybrid",
+    "test:hybrid": "playwright test --project=hybrid --grep @hybrid --pass-with-no-tests",
     "test:headed": "playwright test --project=ui-chromium --headed",
     "test:debug": "playwright test --debug",
     "test:list": "playwright test --list",

@@ -16,6 +16,28 @@ const STRING_FIELDS = ['title', 'objective', 'risk'];
 const LIST_FIELDS = ['preconditions', 'testData', 'steps', 'expectedResults', 'references'];
 const REQUIRED_NON_EMPTY_LISTS = ['steps', 'expectedResults'];
 
+const LAYER_BY_ID_KIND = { API: 'API', UI: 'UI', PERF: 'Performance' };
+const AREA_TAGS = { AUTH: '@auth', PAY: '@payments', FEE: '@fees', TXN: '@transactions' };
+
+/**
+ * Deterministic placement: the one file a case's automation lives in, and its tags, derived
+ * from the ID alone (<AREA>-<KIND>-<NNN>). Related cases share a file:
+ *   AUTH-UI-003  → tests/playwright/ui/auth-ui.spec.ts    tags @ui @auth
+ *   PAY-API-003  → tests/playwright/api/pay-api.spec.ts   tags @api @payments
+ *   PAY-PERF-001 → tests/k6/scripts/PAY-PERF-001.js       k6 tags { category: 'performance', case_id }
+ */
+export function placementFor(id) {
+  const [area, kind] = id.split('-');
+  if (kind === 'PERF') {
+    return { scriptPath: `tests/k6/scripts/${id}.js`, k6Tags: { category: 'performance', case_id: id } };
+  }
+  const folder = kind.toLowerCase();
+  return {
+    scriptPath: `tests/playwright/${folder}/${area.toLowerCase()}-${folder}.spec.ts`,
+    tags: [`@${folder}`, AREA_TAGS[area] ?? `@${area.toLowerCase()}`],
+  };
+}
+
 /** Fields a PATCH may change. `id` is deliberately absent: IDs are permanent. */
 export const EDITABLE_FIELDS = [
   ...STRING_FIELDS,
@@ -61,6 +83,16 @@ export function validateTest(test) {
   }
   if (test.automationStatus === 'automated' && !test.scriptPath) {
     errors.push(`${where}: an automated test needs a scriptPath`);
+  }
+  if (typeof test.id === 'string' && ID_PATTERN.test(test.id)) {
+    const kind = test.id.split('-')[1];
+    if (ENUMS.layer.includes(test.layer) && LAYER_BY_ID_KIND[kind] !== test.layer) {
+      errors.push(`${where}: layer must be ${LAYER_BY_ID_KIND[kind]} for a -${kind}- ID`);
+    }
+    const expected = placementFor(test.id).scriptPath;
+    if (typeof test.scriptPath === 'string' && test.scriptPath && test.scriptPath !== expected) {
+      errors.push(`${where}: scriptPath must be ${expected} (derived from the ID)`);
+    }
   }
   return errors;
 }

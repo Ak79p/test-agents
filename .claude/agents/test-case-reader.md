@@ -1,6 +1,6 @@
 ---
 name: test-case-reader
-description: Resolves one exact test case ID from the FeeFlow test catalogue (test-manager/data/catalogue.json) and returns its full, verbatim specification. Use as step 1 of any "Automate/Review/Debug <ID>" request. Read-only.
+description: Resolves one exact test case ID from the FeeFlow test catalogue (test-manager/data/catalogue.json) and returns its full, verbatim specification. Use as step 1 of thorough-mode requests ("Automate thorough <ID>", Plan, Review, Debug, Update, k6). Plain "Automate <ID>" runs in fast mode without subagents. Read-only.
 tools: Bash, Read, Grep, Glob
 ---
 
@@ -18,11 +18,11 @@ One test case ID exactly as the user wrote it (e.g. `AUTH-API-001`).
    * `2` (not found) → STOP. Report `STATUS: NOT_FOUND`, the tool's message and the IDs it lists with the same prefix. Do not pick one.
    * `3` (duplicated) → STOP. Report `STATUS: DUPLICATED`.
    * anything else → STOP. Report `STATUS: ERROR` with the output.
-3. Classify the case from its `layer` field and its steps, not from the ID:
-   * `API`: only HTTP calls → Playwright project `api`, folder `tests/playwright/api/`.
-   * `UI`: browser-only steps → project `ui-chromium` (or `ui-mobile` if the case requires a phone viewport), folder `tests/playwright/ui/`.
-   * `HYBRID`: a UI-layer case whose steps *require* direct API calls (setup or out-of-band verification, e.g. revoking a token via the API) → project `hybrid`, folder `tests/playwright/hybrid/`.
-   * `PERFORMANCE`: `layer == "Performance"` / `automationTarget == "k6"` → k6, `tests/k6/scripts/`.
+3. Classify the case from its `layer` field (the validator guarantees it matches the ID's kind segment), and take the target from `node test-manager/scripts/case.mjs placement <ID>`, never from judgment:
+   * `API` → project `api`, file `tests/playwright/api/<area>-api.spec.ts`.
+   * `UI` → project `ui-chromium` (or `ui-mobile` when the title has `@mobile`), file `tests/playwright/ui/<area>-ui.spec.ts`. A UI case that also checks an API response or localStorage is still `UI`.
+   * `PERFORMANCE` → k6, `tests/k6/scripts/<ID>.js`.
+   * `HYBRID` only if the catalogue's `layer` says so (no such layer exists today).
 4. Derive acceptance criteria as a checklist that maps **one-to-one** to the `expectedResults` entries (same order, same values). Do not add, merge or soften criteria.
 
 ## Output (exact format)
@@ -31,7 +31,7 @@ STATUS: FOUND | NOT_FOUND | DUPLICATED | ERROR
 ID: <id>
 TITLE: <title>
 TYPE: API | UI | HYBRID | PERFORMANCE   (reason: <one line>)
-TARGET: Playwright project <name> → <folder>   |   k6 → tests/k6/scripts/
+TARGET: Playwright project <name> → <placement scriptPath> tags <placement tags>   |   k6 → tests/k6/scripts/<ID>.js
 PRIORITY: <P0|P1|P2>
 CURRENT TRACKING: automationStatus=<…> scriptPath=<…> latestResult=<…> lastExecuted=<…>
 

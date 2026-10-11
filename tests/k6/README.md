@@ -151,7 +151,11 @@ Use `abortOnFail` only for safety stops, not for normal assertions.
 
 **Tags.**
 * Give every request a stable `name` tag, especially URLs with IDs: `http.get(url(`/payments/${id}`), { tags: { name: 'GET /payments/{id}' } })`. This prevents one metric series per payment ID.
-* Add a run-level tag for comparisons: `k6 run --tag testid=PAY-PERF-001 …`.
+* Tag every script with its category and case ID (the values `node test-manager/scripts/case.mjs placement <ID>` prints as `k6Tags`). k6 adds these to every metric the script emits:
+  ```js
+  export const options = { tags: { category: 'performance', case_id: 'PAY-PERF-001' }, scenarios: { … }, thresholds: { … } };
+  ```
+* **Running tagged scripts.** k6 tags label metrics. They don't select scripts, so there is no k6 equivalent of `--grep` and no npm "run all performance" command. Run a case by its script (`k6 run scripts/<ID>.js`). Filter results by tag in thresholds (`'http_req_duration{case_id:PAY-PERF-001}'`) or in exported output (`--summary-export`, `--out json=…`). Override or add a tag per run with `k6 run --tag case_id=PAY-PERF-001 …`. Playwright's `@tag` convention doesn't apply here.
 
 **Checks** verify correctness under load: status code, response shape, business state (`status === 'SUCCEEDED'`), and the replay header `Idempotent-Replayed`. Keep them cheap; parse JSON once per response.
 

@@ -10,10 +10,11 @@ const isWindows = process.platform === 'win32';
  *  - api          → tests in ./api, baseURL = API_BASE_URL (use relative paths: request.get('fees/outstanding'))
  *  - ui-chromium  → tests in ./ui, baseURL = BASE_URL, desktop viewport
  *  - ui-mobile    → tests in ./ui tagged @mobile, phone viewport
- *  - hybrid       → tests in ./hybrid that need both the browser and direct API calls
- *                   (baseURL = BASE_URL; create API contexts with env.apiBaseUrl)
+ *  - hybrid       → tests in ./hybrid, reserved for a catalogue-defined Hybrid layer (none today);
+ *                   UI cases that also call the API stay in ./ui
  *
- * Test titles must start with their catalogue ID (e.g. "PAY-API-003 ...") so a single
+ * Files and tags are derived from the ID (node test-manager/scripts/case.mjs placement <ID>),
+ * e.g. ui/auth-ui.spec.ts with tags @ui @auth. Test titles must start with their catalogue ID so a single
  * case can be run with: npx playwright test --grep PAY-API-003
  */
 export default defineConfig({

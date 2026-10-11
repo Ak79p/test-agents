@@ -17,14 +17,16 @@ Inputs, outputs and boundaries for each agent: [agents/README.md](agents/README.
 
 ## Orchestration sequence and how the ID flows
 
+Plain `Automate <ID>` runs in **fast mode**: the main session does everything itself, with no subagents. It reads the case with `case.mjs show`, implements the test, runs it once, allows one targeted fix, and records the result with one `case.mjs update`. MCP is used only when a locator or behaviour is unknown. See CLAUDE.md → "Fast mode". The multi-agent sequence below is **thorough mode** (`Automate thorough <ID>`), which is for complex, ambiguous or high-risk cases. Plan, Review, Debug, Update and k6 requests also use the agents.
+
 ```
-user: "Automate AUTH-API-001"
+user: "Automate thorough AUTH-API-001"
         │
         ▼
 main session (orchestrator, follows CLAUDE.md)
   1. test-case-reader ──► "STATUS: FOUND … SPEC (verbatim JSON) … ACCEPTANCE CRITERIA AC1..n"
         │  NOT_FOUND / DUPLICATED → stop, ask the user
-  2. playwright-mcp-explorer ◄── reader block (verbatim)      [UI/hybrid; API when needed]
+  2. playwright-mcp-explorer ◄── reader block (verbatim)      [UI; API when needed]   
         └─► verified locators, messages, endpoints, SPEC MISMATCHES
   3. test-automation-engineer ◄── reader block + explorer findings
         └─► files, project, run command, AC → assertion mapping
