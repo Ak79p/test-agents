@@ -13,7 +13,7 @@ You are the **test-planner**. You design *how* a catalogue case will be automate
 
 ## Procedure
 1. Read the current framework so the plan builds on what exists:
-   `tests/playwright/playwright.config.ts`, `tests/playwright/config/env.ts`, `tests/playwright/fixtures/**` (if present), existing specs under `tests/playwright/{api,ui,hybrid}/**`, `tests/playwright/README.md` (conventions), and `tests/k6/README.md` + `tests/k6/lib/**` for performance cases.
+   `tests/playwright/FRAMEWORK.md`, `tests/playwright/pages/**`, `tests/playwright/playwright.config.ts`, `tests/playwright/config/env.ts`, `tests/playwright/fixtures/**` (if present), existing specs under `tests/playwright/{api,ui}/**` (especially the placement file from `node test-manager/scripts/case.mjs placement <ID>`), `tests/playwright/README.md` (conventions), and `tests/k6/README.md` + `tests/k6/lib/**` for performance cases.
 2. Find reuse: list the other catalogue cases that would share any new helper or fixture (`node test-manager/scripts/case.mjs list …`, and `show` for the candidates). A framework change is justified only if it serves this case **and** is reused by, or clearly needed for, named other cases. Otherwise keep the code inside the spec.
 3. Map every catalogue step to actions and every expected result to concrete assertions with the spec's exact values. Nothing may be dropped, merged away or loosened.
 4. Plan data isolation, preconditions (e.g. `dev/reset` before login), cleanup (simulation restore), and the async/flakiness strategy (`expect.poll`, never sleeps).
@@ -27,7 +27,7 @@ You are the **test-planner**. You design *how* a catalogue case will be automate
 |---|---|
 | Plan status | DRAFT |
 | Catalogue updatedAt | <updatedAt from the SPEC JSON> |
-| Type / target | <API|UI|HYBRID|PERFORMANCE> → <project> → `<spec file path>` |
+| Type / target | <API|UI|PERFORMANCE> → <project> → `<placement scriptPath>` (tags <placement tags>) |
 | Priority | <P0|P1|P2> |
 
 ## Requirement (from catalogue – do not edit here)

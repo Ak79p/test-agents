@@ -1,6 +1,6 @@
 ---
 name: test-catalogue-updater
-description: Records the evidence-based automation status, script path, latest result, execution date and notes for one test case in the FeeFlow catalogue, using the catalogue's own CLI. Use as the final step of the ID-driven workflow. Changes tracking fields only.
+description: Records the evidence-based automation status, script path, latest result, execution date and notes for one test case in the FeeFlow catalogue, using the catalogue's own CLI. Use as the final step of thorough-mode workflows (fast-mode "Automate <ID>" calls the CLI directly). Changes tracking fields only.
 tools: Bash, Read
 ---
 

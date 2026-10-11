@@ -206,7 +206,7 @@ function renderDetail(t, editingContent) {
     el(
       'div',
       {},
-      el('div', { class: 'detail-id mono', 'data-testid': 'detail-id', text: t.id }),
+      el('div', { class: 'detail-id-row' }, el('span', { class: 'detail-id mono', 'data-testid': 'detail-id', text: t.id }), copyIdButton(t.id)),
       el('h2', { id: 'detail-title', 'data-testid': 'detail-title', text: t.title }),
       el('div', { class: 'badges' }, badge('layer', t.layer), badge('priority', t.priority), badge('automation', t.automationStatus), badge('result', t.latestResult)),
     ),
@@ -215,6 +215,29 @@ function renderDetail(t, editingContent) {
 
   const content = editingContent ? contentForm(t) : procedureView(t);
   $('#detail-body').replaceChildren(header, trackingForm(t), content);
+}
+
+const COPY_ICON =
+  '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>';
+
+function copyIdButton(id) {
+  const feedback = el('span', { class: 'copy-feedback small', role: 'status', 'data-testid': 'copy-id-feedback' });
+  const button = el('button', { type: 'button', class: 'btn btn-icon', 'aria-label': 'Copy test case ID', title: 'Copy test case ID', 'data-testid': 'copy-id' });
+  button.innerHTML = COPY_ICON;
+  button.addEventListener('click', async () => {
+    clearTimeout(copyIdButton.timer);
+    try {
+      await navigator.clipboard.writeText(id);
+      feedback.textContent = 'Copied!';
+      feedback.dataset.kind = 'success';
+    } catch {
+      feedback.textContent = 'Copy failed. Select the ID and press Ctrl+C.';
+      feedback.dataset.kind = 'error';
+    }
+    copyIdButton.timer = setTimeout(() => (feedback.textContent = ''), 2000);
+  });
+  return el('span', { class: 'copy-id' }, button, feedback);
 }
 
 function procedureView(t) {
@@ -249,7 +272,7 @@ function trackingForm(t) {
       field('Automation status', select('automationStatus', t.automationStatus)),
       field('Latest result', select('latestResult', t.latestResult)),
       field('Last executed', el('input', { type: 'date', name: 'lastExecuted', value: t.lastExecuted || '', 'data-testid': 'edit-lastExecuted' })),
-      field('Script path', el('input', { type: 'text', name: 'scriptPath', value: t.scriptPath, placeholder: 'e.g. tests/playwright/api/payments/PAY-API-003.spec.ts', 'data-testid': 'edit-scriptPath' })),
+      field('Script path', el('input', { type: 'text', name: 'scriptPath', value: t.scriptPath, placeholder: 'e.g. tests/playwright/api/pay-api.spec.ts', 'data-testid': 'edit-scriptPath' })),
     ),
     field('Notes', el('textarea', { name: 'notes', rows: '3', 'data-testid': 'edit-notes', text: t.notes })),
     el('div', { class: 'form-errors', 'data-testid': 'form-errors', hidden: true }),

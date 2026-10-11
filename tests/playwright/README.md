@@ -2,16 +2,19 @@
 
 UI, API and hybrid automation for the FeeFlow school-fee app. Tests are added one at a time, by catalogue ID, from [`test-manager/data/catalogue.json`](../../test-manager/data/catalogue.json) through the ID-driven workflow in [CLAUDE.md](../../CLAUDE.md).
 
+**Conventions, fixtures and page objects: [FRAMEWORK.md](FRAMEWORK.md)** (read it before writing a test).
+
 ## Layout
 
 ```
 tests/playwright/
 ├── playwright.config.ts   projects, reporters, baseURLs, optional webServer
 ├── config/env.ts          the only place that reads environment variables
-├── api/<area>/<ID>.spec.ts      API tests     → project "api"
-├── ui/<area>/<ID>.spec.ts       UI tests      → projects "ui-chromium", "ui-mobile" (@mobile tag)
-├── hybrid/<area>/<ID>.spec.ts   UI + API      → project "hybrid"
-├── fixtures/                    (created when a helper is first reused)
+├── api/<area>-api.spec.ts       API tests, one file per area (e.g. api/pay-api.spec.ts)  → project "api"
+├── ui/<area>-ui.spec.ts         UI tests, one file per area (e.g. ui/auth-ui.spec.ts)    → "ui-chromium", "ui-mobile" (@mobile)
+├── hybrid/                      reserved for a catalogue Hybrid layer (none today)        → project "hybrid"
+├── fixtures/index.ts            custom test/expect: loginPage, api, apiAs (see FRAMEWORK.md)
+├── pages/                       page objects (login-page.ts)
 ├── .env.example           copy to .env (git-ignored)
 ├── package.json           Playwright deps, kept separate from the frontend
 └── tsconfig.json
@@ -41,6 +44,7 @@ To use an installed browser instead of the downloaded Chromium, set `PW_BROWSER_
 | `API_BASE_URL` | `http://127.0.0.1:8000/api/v1` | `baseURL` for the `api` project (a trailing `/` is added automatically) |
 | `TEST_USER_EMAIL` / `TEST_USER_PASSWORD` | Thandi / *(empty)* | Primary seeded parent |
 | `SECONDARY_USER_EMAIL` / `SECONDARY_USER_PASSWORD` | John / *(empty)* | Cross-parent isolation tests |
+| `LOADTEST_USER_EMAIL` / `LOADTEST_USER_PASSWORD` | `loadtest050@example.com` / *(empty → falls back to `TEST_USER_PASSWORD`)* | Payment API tests (`env.loadtestUser`) |
 | `PW_WORKERS` | `1` | Parallel workers (the app shares one SQLite DB) |
 | `PW_BROWSER_CHANNEL` | *(bundled Chromium)* | `msedge` / `chrome` |
 | `PW_START_SERVERS` | `false` | `true` = Playwright starts backend + frontend if not already running |
@@ -53,10 +57,12 @@ Read configuration only through `config/env.ts`, e.g. `import { env } from '../c
 | Command | What it does |
 |---|---|
 | `npm test` | All projects |
-| `npm run test:api` | API project only |
-| `npm run test:ui` | Desktop UI project only |
+| `npm run test:api` | `@api` tests in the `api` project |
+| `npm run test:ui` | `@ui` tests in `ui-chromium` + `ui-mobile` (each test runs once: `@mobile` tests only on mobile, the rest only on desktop) |
 | `npm run test:mobile` | Mobile UI project (tests tagged `@mobile`) |
-| `npm run test:hybrid` | Hybrid project |
+| `npm run test:hybrid` | `@hybrid` tests in the `hybrid` project |
+
+The category scripts pass `--pass-with-no-tests`, so an empty category (currently API and hybrid) exits 0 with "Total: 0 tests".
 | `npm run test:headed` | Desktop UI, visible browser |
 | `npm run test:debug` | Playwright Inspector |
 | `npm run pw:ui` | Playwright UI mode (watch, time-travel) |
@@ -69,24 +75,34 @@ Read configuration only through `config/env.ts`, e.g. `import { env } from '../c
 | By | Command (from `tests/playwright/`) |
 |---|---|
 | Catalogue ID / title | `npx playwright test --grep AUTH-API-001` |
-| File | `npx playwright test api/auth/AUTH-API-001.spec.ts --project=api` |
-| File + line | `npx playwright test api/auth/AUTH-API-001.spec.ts:12` |
+| Tag | `npx playwright test --grep "@ui"` · `--grep "@api"` · `--grep "@auth"` · combine: `--grep "(?=.*@ui)(?=.*@auth)"` · exclude: `--grep-invert "@payments"` |
+| File + ID (the placement command) | `npx playwright test api/auth-api.spec.ts --project=api --grep AUTH-API-001` |
+| File + line | `npx playwright test ui/auth-ui.spec.ts:12` |
 | Repeat to detect flakiness | `npx playwright test --grep AUTH-UI-001 --repeat-each=3` |
 | Headed / debug | add `--headed` or `--debug` |
 
-## UI vs API vs hybrid placement
+## Deterministic placement and tags
 
-| Put it in | When the catalogue case… | Use |
-|---|---|---|
-| `api/` (project `api`) | has only HTTP steps (layer `API`) | `request` fixture, paths relative to `API_BASE_URL` |
-| `ui/` (`ui-chromium`; `ui-mobile` for `@mobile`) | is driven entirely through the browser (layer `UI`) | `page`, `getByTestId` / `getByRole` |
-| `hybrid/` (project `hybrid`) | is a UI case whose steps *require* API calls for setup or out-of-band checks (e.g. revoke a token via the API, then reload the page) | `page` for the UI, plus `playwright.request.newContext({ baseURL: env.apiBaseUrl })` for the API (dispose it afterwards) |
+The file is derived from the ID, never chosen by judgment. `placementFor()` in [`test-manager/lib/catalogue.mjs`](../../test-manager/lib/catalogue.mjs) is the single rule, `node test-manager/scripts/case.mjs placement <ID>` prints it, and the catalogue validator rejects any other `scriptPath`.
+
+| ID | File | Project | Tags |
+|---|---|---|---|
+| `<AREA>-UI-NNN` (e.g. `AUTH-UI-001`, `AUTH-UI-003`) | `ui/<area>-ui.spec.ts` (`ui/auth-ui.spec.ts`) | `ui-chromium` (`ui-mobile` if the title has `@mobile`) | `@ui` + area |
+| `<AREA>-API-NNN` (e.g. `PAY-API-003`) | `api/<area>-api.spec.ts` (`api/pay-api.spec.ts`) | `api` | `@api` + area |
+| `<AREA>-PERF-NNN` | `../k6/scripts/<ID>.js` | k6 | k6 `options.tags` |
+
+Area tags: `AUTH` → `@auth`, `PAY` → `@payments`, `FEE` → `@fees`, `TXN` → `@transactions`. Tags use Playwright's native `tag` option, so `--grep` matches them:
+```ts
+test('AUTH-UI-003 <catalogue title>', { tag: ['@ui', '@auth'] }, async ({ page }) => { … });
+```
+* Add a new case to its file and keep the existing tests. Create the file at the exact path only if it's missing. Grep for the ID first: an existing test is edited in place, never duplicated.
+* A UI case that also checks an API response or localStorage stays in `ui/`. Create an API context with `playwright.request.newContext({ baseURL: env.apiBaseUrl })` and dispose it. `hybrid/` (tag `@hybrid`) is only for a catalogue-defined Hybrid layer, which doesn't exist today.
 
 Don't repeat API checks in UI tests. The catalogue already splits coverage along the test pyramid.
 
 ## Conventions for new tests
 
-1. **One catalogue ID per test.** The test title starts with the ID, e.g. `test('PAY-API-003 reusing an idempotency key with a different body returns 422', …)`. File names follow the ID inside an area folder (lower-case first ID segment): `api/pay/PAY-API-003.spec.ts`, `ui/auth/AUTH-UI-001.spec.ts`. Use one `test.step('S<n> …')` per catalogue step.
+1. **One catalogue ID per test.** The test title starts with the ID, e.g. `test('PAY-API-003 reusing an idempotency key with a different body returns 422', …)`. It goes in the file and carries the tags given by `case.mjs placement <ID>` (see above). Use one `test.step('S<n> …')` per catalogue step.
 2. **API paths are relative** to the API base, without a leading slash: `request.post('payments', …)`. A leading `/` would drop `/api/v1`.
 3. **Selectors:** prefer `getByTestId(...)` (the app has stable `data-testid` attributes, listed in [docs/APPLICATION.md §13](../../docs/APPLICATION.md#13-frontend-notes-for-ui-automation)), then role and label queries.
 4. **Money formatting:** the UI formats with `en-ZA` and uses non-breaking spaces (e.g. `R 24 200,00`). Normalise whitespace before comparing text.
@@ -94,7 +110,7 @@ Don't repeat API checks in UI tests. The catalogue already splits coverage along
    * Read-only checks on the seeded parents (Thandi, John, …) assume a **freshly seeded** database. `POST /api/v1/dev/reset` re-seeds it, but it **invalidates every access token**, so call it before logging in, never mid-run while other workers are active.
    * Tests that create or confirm payments should prefer a dedicated `loadtestNNN@example.com` account (large balances), or reset first.
    * Tests that change simulation settings (`PUT /api/v1/dev/simulation`) must restore them (`DELETE /api/v1/dev/simulation`) in `afterEach`/`afterAll`.
-6. **Shared helpers and fixtures** go in `fixtures/` only when a second test needs them.
+6. **Shared helpers and fixtures** go in `fixtures/index.ts` (page objects in `pages/`) only when a second test needs them. Import `test`/`expect` from `../fixtures`.
 7. **Catalogue linkage:** recorded with `node test-manager/scripts/case.mjs update <ID> …` (the `test-catalogue-updater` agent does this). Set `latestResult`/`lastExecuted` only after an actual run.
 
 ## Reports and debugging
@@ -105,7 +121,7 @@ Don't repeat API checks in UI tests. The catalogue already splits coverage along
 
 ## From MCP exploration to permanent test code
 
-Playwright **MCP** lets Claude drive a real browser interactively. It is used by the `playwright-mcp-explorer` agent to confirm routes, `data-testid`s, accessible names and exact messages in the running app. Nothing it does is saved as a test.
+Playwright **MCP** lets Claude drive a real browser interactively. In thorough mode (`Automate thorough <ID>`) the `playwright-mcp-explorer` agent uses it to confirm routes, `data-testid`s, accessible names and exact messages in the running app. Fast-mode `Automate <ID>` uses MCP only when existing tests and the source can't settle a locator or behaviour. Nothing MCP does is saved as a test.
 
 The `test-automation-engineer` agent then writes a normal Playwright Test spec in this folder, using only locators and values the explorer verified and assertions taken verbatim from the catalogue's expected results. That spec is what runs from then on (`npx playwright test …`), in the IDE or in CI, without MCP or Claude. MCP is set up in Claude Code (see [.claude/README.md](../../.claude/README.md)); this framework does not depend on it.
 

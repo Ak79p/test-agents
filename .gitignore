@@ -39,3 +39,6 @@ test-manager/data/*.tmp
 # Claude Code (personal settings) and Playwright MCP output
 .claude/settings.local.json
 .playwright-mcp/
+
+# Generated, local-only test catalogue export (regenerate: node test-manager/scripts/export-md.mjs)
+/test-catalog.md

@@ -1,6 +1,6 @@
 ---
 name: test-validator
-description: Independently reviews an implemented catalogue test against its verbatim specification, runs it with the project's real command, and reports the actual outcome with evidence. Use as step 4 after implementation, or alone for "Review/Debug <ID>". Never edits test or app code.
+description: Independently reviews an implemented catalogue test against its verbatim specification, runs it with the project's real command, and reports the actual outcome with evidence. Thorough mode only: step 4 after implementation in "Automate thorough <ID>", or alone for "Review/Debug <ID>". Not used by fast-mode "Automate <ID>". Never edits test or app code.
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -15,8 +15,8 @@ You are the **test-validator**. You judge the implementation against the spec an
 ## 1. Static review
 Check and report each item as ✓ or ✗ with file:line:
 * Every catalogue step is represented (`test.step('S<n> …')`), and every AC has assertions with the **spec's exact values**. Watch for loosened assertions: `toBeTruthy` instead of a value, `toContain` instead of `toBe`, missing status codes, try/catch that swallows failures, conditional `expect`s, `test.skip`/`fixme`.
-* The title starts with the ID; the file is in the right folder/project.
-* Configuration comes via `config/env.ts`; no hard-coded secrets, URLs or tokens; no secret logging.
+* The title starts with the ID; the file is exactly the `scriptPath` from `node test-manager/scripts/case.mjs placement <ID>` (shared area file, not a per-ID file or `hybrid/` for a UI case); the test has the placement tags (native `tag` option); the ID appears in exactly one test file; existing tests in that file are untouched.
+* Follows `tests/playwright/FRAMEWORK.md`: imports from `../fixtures`, reuses `loginPage`/`api` instead of duplicating them, and keeps assertions out of page objects. Configuration comes via `config/env.ts`; no hard-coded secrets, URLs or tokens; no secret logging.
 * Isolation: preconditions honoured (reset before login when required), simulation restored, unique keys, no reliance on other tests' leftovers.
 * No fixed sleeps or arbitrary timeout inflation; locators are test IDs or roles.
 * Framework changes (fixtures/helpers/config) don't break existing specs: `npx playwright test --list` and `npm run typecheck` still pass.
@@ -27,8 +27,9 @@ Preflight: `curl -s http://127.0.0.1:8000/api/v1/health` (and the UI at `http://
 
 Run from `tests/playwright/`:
 ```
-npx playwright test <file> --project=<project> --reporter=list
+npx playwright test <file> --project=<project> --grep <ID> --reporter=list
 ```
+(`--grep <ID>` is required because the file holds other cases too; the placement `command` already includes it.)
 * If it passes and the test is UI/hybrid or touches async behaviour, also run `--repeat-each=3` to detect flakiness.
 * k6 (functional validation only): `k6 run --vus 1 --iterations 1 tests/k6/scripts/<ID>.js`. **Never run the full load profile** unless the user explicitly asked for a load run.
 

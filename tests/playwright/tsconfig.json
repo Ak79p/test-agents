@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "commonjs",
-    "moduleResolution": "node",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "lib": ["ES2022", "DOM"],
     "strict": true,
     "esModuleInterop": true,
@@ -11,5 +11,5 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["playwright.config.ts", "config/**/*.ts", "api/**/*.ts", "ui/**/*.ts", "hybrid/**/*.ts", "fixtures/**/*.ts"]
+  "include": ["playwright.config.ts", "config/**/*.ts", "api/**/*.ts", "ui/**/*.ts", "hybrid/**/*.ts", "fixtures/**/*.ts", "pages/**/*.ts"]
 }

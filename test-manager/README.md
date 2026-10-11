@@ -74,15 +74,15 @@ Results describe the **last execution**, not the quality of the script: a correc
 
 ## Automation paths and evidence
 
-* `scriptPath` is repo-relative, for example `tests/playwright/api/auth/AUTH-API-001.spec.ts` or `tests/k6/scripts/FEE-PERF-002.js`.
-* `lastExecuted` holds the date (YYYY-MM-DD). The time, the exact command and the evidence summary go into `notes` as timestamped lines, e.g. `[2026-10-12 10:04 UTC+05:30] passed via: npx playwright test api/auth/AUTH-API-001.spec.ts --project=api | 1 passed (0.9s)`.
+* `scriptPath` is repo-relative and must be the path derived from the ID (`node scripts/case.mjs placement <ID>`): `tests/playwright/api/auth-api.spec.ts`, `tests/playwright/ui/auth-ui.spec.ts`, or `tests/k6/scripts/FEE-PERF-002.js`. The validator rejects any other path, and also a `layer` that doesn't match the ID's kind segment (`API`, `UI`, `PERF`).
+* `lastExecuted` holds the date (YYYY-MM-DD). The time, the exact command and the evidence summary go into `notes` as timestamped lines, e.g. `[2026-10-12 10:04 UTC+05:30] passed via: npx playwright test api/auth-api.spec.ts --project=api --grep AUTH-API-001 | 1 passed (0.9s)`.
 
 ## CLI (how Claude reads and updates cases)
 
 ```bash
 node test-manager/scripts/case.mjs show AUTH-API-001                 # full case as JSON (exact ID match)
 node test-manager/scripts/case.mjs list --layer UI --status planned  # filtered list
-node test-manager/scripts/case.mjs update AUTH-API-001   --automation-status automated   --script-path tests/playwright/api/auth/AUTH-API-001.spec.ts   --result passed --executed today   --note "passed via: npx playwright test … | 1 passed"
+node test-manager/scripts/case.mjs update AUTH-API-001   --automation-status automated   --script-path tests/playwright/api/auth-api.spec.ts   --result passed --executed today   --note "passed via: npx playwright test … | 1 passed"
 ```
 * `update` changes **tracking fields only** (`automationStatus`, `scriptPath`, `latestResult`, `lastExecuted`, `notes`). `--note` appends a timestamped line and keeps existing notes; `--notes` replaces them. Requirements (title, steps, expected results) are edited only by you in the web UI.
 * Every update is validated (e.g. `automated` requires a `scriptPath`) and written atomically through the same store as the web server, so the CLI is safe while the server runs. Reload the browser tab to see CLI changes.

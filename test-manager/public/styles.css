@@ -346,6 +346,25 @@ textarea:focus {
   color: var(--primary);
   font-weight: 700;
 }
+.detail-id-row,
+.copy-id {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.btn-icon {
+  padding: 0.2rem;
+  color: var(--muted);
+}
+.btn-icon:hover {
+  color: var(--primary);
+}
+.copy-feedback[data-kind='success'] {
+  color: #1f7a4d;
+}
+.copy-feedback[data-kind='error'] {
+  color: #b42318;
+}
 .badges {
   display: flex;
   gap: 0.4rem;

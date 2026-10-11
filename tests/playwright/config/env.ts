@@ -60,4 +60,13 @@ export const env = {
       return required('SECONDARY_USER_PASSWORD');
     },
   },
+  /** Dedicated writing account for payment tests. The password falls back to TEST_USER_PASSWORD (all seeded accounts share it). */
+  loadtestUser: {
+    get email(): string {
+      return optional('LOADTEST_USER_EMAIL', 'loadtest050@example.com');
+    },
+    get password(): string {
+      return process.env.LOADTEST_USER_PASSWORD || required('TEST_USER_PASSWORD');
+    },
+  },
 };
