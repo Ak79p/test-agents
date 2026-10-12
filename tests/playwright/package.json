@@ -16,7 +16,8 @@
     "report": "playwright show-report playwright-report",
     "codegen": "playwright codegen http://localhost:5173",
     "install:browsers": "playwright install chromium",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:locators": "node scripts/check-locators.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

@@ -1,22 +1,25 @@
 import { randomUUID } from 'node:crypto';
-import type { APIRequestContext } from '@playwright/test';
 import { test, expect } from '../fixtures';
 import { env } from '../config/env';
+import { FeesApi } from '../api-clients/fees-api';
+import { PaymentsApi } from '../api-clients/payments-api';
 
-test('PAY-API-001 Create payment returns a PENDING payment without moving money', { tag: ['@api', '@payments'] }, async ({ request, apiAs }) => {
-  let payer: APIRequestContext;
+test('PAY-API-001 Create payment returns a PENDING payment without moving money', { tag: ['@api', '@payments'] }, async ({ apiAs, dev }) => {
+  let payments: PaymentsApi;
+  let fees: FeesApi;
   let feeId: string;
   let balanceBefore: number;
   let created: Record<string, any>;
 
   await test.step('Precondition: restore simulation defaults', async () => {
-    const res = await request.delete('dev/simulation');
-    expect(res.status()).toBe(200);
+    await dev.restoreSimulation();
   });
 
   await test.step('S1 Log in as loadtest050 and GET fees/outstanding; take Term 3 Tuition', async () => {
-    payer = await apiAs(env.loadtestUser);
-    const res = await payer.get('fees/outstanding');
+    const payer = await apiAs(env.loadtestUser);
+    payments = new PaymentsApi(payer);
+    fees = new FeesApi(payer);
+    const res = await fees.outstanding();
     expect(res.status()).toBe(200);
     const fee = (await res.json()).items.find((f: { description: string }) => f.description === 'Term 3 Tuition');
     expect(fee).toBeDefined();
@@ -26,10 +29,7 @@ test('PAY-API-001 Create payment returns a PENDING payment without moving money'
 
   await test.step('S2 POST payments with a new Idempotency-Key', async () => {
     const key = randomUUID();
-    const res = await payer.post('payments', {
-      headers: { 'Idempotency-Key': key },
-      data: { fee_id: feeId, amount_cents: 10000, payment_method: 'CARD' },
-    });
+    const res = await payments.create({ fee_id: feeId, amount_cents: 10000, payment_method: 'CARD' }, key);
     created = await res.json();
 
     expect(res.status()).toBe(201);
@@ -57,13 +57,13 @@ test('PAY-API-001 Create payment returns a PENDING payment without moving money'
   });
 
   await test.step('S3 GET payments/{id}', async () => {
-    const res = await payer.get(`payments/${created.id}`);
+    const res = await payments.get(created.id);
     expect(res.status()).toBe(200);
     expect(await res.json()).toEqual(created);
   });
 
   await test.step('S4 GET fees/{feeId}', async () => {
-    const res = await payer.get(`fees/${feeId}`);
+    const res = await fees.get(feeId);
     expect(res.status()).toBe(200);
     expect((await res.json()).balance_cents).toBe(balanceBefore);
   });

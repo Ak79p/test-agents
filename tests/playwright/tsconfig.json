@@ -11,5 +11,5 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["playwright.config.ts", "config/**/*.ts", "api/**/*.ts", "ui/**/*.ts", "hybrid/**/*.ts", "fixtures/**/*.ts", "pages/**/*.ts"]
+  "include": ["playwright.config.ts", "config/**/*.ts", "api/**/*.ts", "ui/**/*.ts", "hybrid/**/*.ts", "fixtures/**/*.ts", "pages/**/*.ts", "api-clients/**/*.ts", "test-data/**/*.ts"]
 }

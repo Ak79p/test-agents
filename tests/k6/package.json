@@ -1,0 +1,17 @@
+{
+  "name": "feeflow-k6",
+  "private": true,
+  "version": "0.1.0",
+  "description": "k6 performance tests for the FeeFlow API (k6 is a separate binary; no npm dependencies)",
+  "type": "module",
+  "scripts": {
+    "perf:check": "node run.mjs check",
+    "perf:smoke": "node run.mjs smoke",
+    "perf:read": "node run.mjs read",
+    "perf:baseline": "node run.mjs baseline",
+    "perf:case": "node run.mjs case"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

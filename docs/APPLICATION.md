@@ -11,7 +11,7 @@ Testing workspace (catalogue, agents, Playwright, k6): see the [main README](../
 | Claude agents | Six single-purpose agents (incl. `test-planner`) run in sequence by the main session | `.claude/agents/`, rules in `CLAUDE.md` | [.claude/README.md](../.claude/README.md), [agents](../.claude/agents/README.md) |
 | Playwright MCP | Lets agents drive a real browser to verify UI behaviour before coding | Claude Code local config (`claude mcp get playwright`) | [.claude/README.md#playwright-mcp](../.claude/README.md#playwright-mcp) |
 | Playwright Test | Repeatable UI / API / hybrid tests | `tests/playwright/` (own `package.json`, `playwright.config.ts`) | [tests/playwright/README.md](../tests/playwright/README.md) |
-| k6 | Load and performance tests | `tests/k6/` (`lib/config.js`, `scripts/`) | [tests/k6/README.md](../tests/k6/README.md) |
+| k6 | Load and performance tests | `tests/k6/` (`config/`, `lib/`, `scripts/`, `npm run perf:*`) | [tests/k6/README.md](../tests/k6/README.md) |
 
 ### Prerequisites
 * Everything in [§2](#2-prerequisites) (Python 3.11+, Node.js 18+; Node 22 is used here).
@@ -54,7 +54,7 @@ Unknown IDs are never guessed: Claude stops and asks. Rules: [CLAUDE.md](../CLAU
 
 ---|---|---|
 | `tests/playwright/` | Playwright Test (TypeScript) with `api` and `ui-chromium` / `ui-mobile` projects; its own `package.json` | [tests/playwright/README.md](../tests/playwright/README.md) |
-| `tests/k6/` | k6 workspace with centralised `lib/config.js` (k6 v2.2.0 verified locally) | [tests/k6/README.md](../tests/k6/README.md) |
+| `tests/k6/` | k6 workspace: `config/` (env, safety guards, profiles), `lib/`, starter scripts, `npm run perf:*` (k6 v2.2.0 verified locally) | [tests/k6/README.md](../tests/k6/README.md) |
 | `test-manager/` | Local web catalogue of 44 test cases (API 22 / UI 14 / performance 8), persisted to `data/catalogue.json` | [test-manager/README.md](../test-manager/README.md) |
 | `CLAUDE.md` | Workflow for "Automate `<ID>`" requests | |
 
@@ -126,7 +126,7 @@ zenda-clone/
 ├── tests/
 │   ├── plans/                   implementation plans per case ID (Plan <ID>)
 │   ├── playwright/              Playwright Test: api/ ui/ hybrid/ config/ playwright.config.ts
-│   └── k6/                      k6: lib/config.js scripts/ results/
+│   └── k6/                      k6: config/ lib/ scripts/ results/ run.mjs
 ├── test-manager/                test catalogue: web UI, CLI (scripts/case.mjs), data/catalogue.json
 ├── scripts/                     setup / start / reset scripts (.ps1 for Windows, .sh for macOS/Linux)
 ├── postman/

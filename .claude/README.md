@@ -17,7 +17,7 @@ Inputs, outputs and boundaries for each agent: [agents/README.md](agents/README.
 
 ## Orchestration sequence and how the ID flows
 
-Plain `Automate <ID>` runs in **fast mode**: the main session does everything itself, with no subagents. It reads the case with `case.mjs show`, implements the test, runs it once, allows one targeted fix, and records the result with one `case.mjs update`. MCP is used only when a locator or behaviour is unknown. See CLAUDE.md → "Fast mode". The multi-agent sequence below is **thorough mode** (`Automate thorough <ID>`), which is for complex, ambiguous or high-risk cases. Plan, Review, Debug, Update and k6 requests also use the agents.
+Plain `Automate <ID>` runs in **fast mode** when existing page objects, clients and fixtures cover the case and its behaviour is understood (a `dev.reset()` before login or `dev.restoreSimulation()` doesn't by itself rule it out). The main session does everything itself, with no subagents: it reads the case with `case.mjs show`, reuses the framework, implements the test, runs it once plus `npm run typecheck` and `npm run check:locators`, allows one targeted fix, and records the result with one `case.mjs update`. MCP is used only when a locator or behaviour is unknown. See CLAUDE.md → "Choosing the mode" and "Fast mode". Fast mode may also add a thin API client, and when the case is already automated it first checks every expected result against the existing assertions. The multi-agent sequence below is **thorough mode** (`Automate thorough <ID>` always forces it): simulation changes, idempotent replay/conflict or concurrent requests, several identities, a missing page object/component/fixture/helper, an observation window or a wait over 10 s, a coverage gap in an existing test, an ambiguous spec, an unexplained failure, or a `DRAFT`/`APPROVED` plan. Exploration is source-only by default when a browser walk-through would need credentials, and it never changes data other cases depend on. Plan, Review, Debug, Update and k6 requests also use the agents.
 
 ```
 user: "Automate thorough AUTH-API-001"
@@ -26,7 +26,7 @@ user: "Automate thorough AUTH-API-001"
 main session (orchestrator, follows CLAUDE.md)
   1. test-case-reader ──► "STATUS: FOUND … SPEC (verbatim JSON) … ACCEPTANCE CRITERIA AC1..n"
         │  NOT_FOUND / DUPLICATED → stop, ask the user
-  2. playwright-mcp-explorer ◄── reader block (verbatim)      [UI; API when needed]   
+  2. playwright-mcp-explorer ◄── reader block (verbatim) + what the framework already covers   [only for gaps]
         └─► verified locators, messages, endpoints, SPEC MISMATCHES
   3. test-automation-engineer ◄── reader block + explorer findings
         └─► files, project, run command, AC → assertion mapping
@@ -34,7 +34,8 @@ main session (orchestrator, follows CLAUDE.md)
         └─► review checklist, RESULT, exact command, evidence
         (TEST DEFECT → back to 3, max 2 rounds; APP DEFECT/SPEC ISSUE → report)
   (for "Plan <ID>": 1 → 2 → test-planner writes tests/plans/<ID>.md (DRAFT) and the flow stops;
-   a later "Automate <ID>" gives the APPROVED plan to the engineer and validator)
+   a later "Automate <ID>" gives the APPROVED plan to the engineer and validator; after a PASSED run with
+   complete coverage the orchestrator marks the plan IMPLEMENTED)
   5. test-catalogue-updater ◄── ID + engineer + validator reports
         └─► catalogue fields changed, verified by read-back
         │

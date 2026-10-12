@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "application": "FeeFlow school-fee payments (local practice app)",
-  "updatedAt": "2026-10-11T19:15:32.561Z",
+  "updatedAt": "2026-10-12T05:10:26.484Z",
   "tests": [
     {
       "id": "AUTH-API-001",
@@ -276,8 +276,8 @@
       "scriptPath": "tests/playwright/api/pay-api.spec.ts",
       "latestResult": "passed",
       "lastExecuted": "2026-10-12",
-      "notes": "[2026-10-12 00:45 UTC+05:30] PASSED via: cd tests/playwright && npx playwright test api/pay-api.spec.ts --project=api --grep PAY-API-001 --reporter=list | 1 passed (794ms); repeat-each=3: 3 passed (2.2s)",
-      "updatedAt": "2026-10-11T19:15:32.561Z"
+      "notes": "[2026-10-12 00:45 UTC+05:30] PASSED via: cd tests/playwright && npx playwright test api/pay-api.spec.ts --project=api --grep PAY-API-001 --reporter=list | 1 passed (794ms); repeat-each=3: 3 passed (2.2s)\n[2026-10-12 10:40 UTC+05:30] PASSED via: cd tests/playwright && npx playwright test api/pay-api.spec.ts --project=api --grep PAY-API-001 --reporter=list | 1 passed (885ms); repeat-each=3: 3 passed (2.5s); review: AC coverage COMPLETE; plan tests/plans/PAY-API-001.md → IMPLEMENTED",
+      "updatedAt": "2026-10-12T05:10:26.483Z"
     },
     {
       "id": "PAY-API-002",
@@ -885,9 +885,9 @@
       "automationStatus": "automated",
       "scriptPath": "tests/playwright/ui/auth-ui.spec.ts",
       "latestResult": "passed",
-      "lastExecuted": "2026-10-11",
-      "notes": "[2026-10-11 23:52 UTC+05:30] PASSED via: cd tests/playwright && npm run test:ui | 3 passed (3.0s) (consolidated into ui/auth-ui.spec.ts, tags @ui @auth)",
-      "updatedAt": "2026-10-11T18:22:10.410Z"
+      "lastExecuted": "2026-10-12",
+      "notes": "[2026-10-11 23:52 UTC+05:30] PASSED via: cd tests/playwright && npm run test:ui | 3 passed (3.0s) (consolidated into ui/auth-ui.spec.ts, tags @ui @auth)\n[2026-10-12 10:24 UTC+05:30] PASSED via: cd tests/playwright && npx playwright test ui/auth-ui.spec.ts --project=ui-chromium --grep AUTH-UI-001 --reporter=list | 1 passed (1.6s) (coverage gap closed: all 4 expected results now asserted)",
+      "updatedAt": "2026-10-12T04:54:34.161Z"
     },
     {
       "id": "AUTH-UI-002",
@@ -1024,12 +1024,12 @@
         "/"
       ],
       "automationTarget": "Playwright",
-      "automationStatus": "planned",
-      "scriptPath": "",
-      "latestResult": "not run",
-      "lastExecuted": null,
-      "notes": "",
-      "updatedAt": "2026-10-11T14:46:17Z"
+      "automationStatus": "automated",
+      "scriptPath": "tests/playwright/ui/fee-ui.spec.ts",
+      "latestResult": "passed",
+      "lastExecuted": "2026-10-12",
+      "notes": "[2026-10-12 08:54 UTC+05:30] PASSED via: cd tests/playwright && npx playwright test ui/fee-ui.spec.ts --project=ui-chromium --grep FEE-UI-001 --reporter=list | 1 passed (2.7s)",
+      "updatedAt": "2026-10-12T03:24:18.595Z"
     },
     {
       "id": "PAY-UI-001",
@@ -1066,12 +1066,12 @@
         "/payments/:paymentId"
       ],
       "automationTarget": "Playwright",
-      "automationStatus": "planned",
-      "scriptPath": "",
-      "latestResult": "not run",
-      "lastExecuted": null,
-      "notes": "",
-      "updatedAt": "2026-10-11T14:46:17Z"
+      "automationStatus": "automated",
+      "scriptPath": "tests/playwright/ui/pay-ui.spec.ts",
+      "latestResult": "passed",
+      "lastExecuted": "2026-10-12",
+      "notes": "[2026-10-12 09:20 UTC+05:30] PASSED via: cd tests/playwright && npx playwright test ui/pay-ui.spec.ts --project=ui-chromium --grep PAY-UI-001 --reporter=list | 1 passed (3.8s)",
+      "updatedAt": "2026-10-12T03:50:34.311Z"
     },
     {
       "id": "PAY-UI-002",
@@ -1106,12 +1106,12 @@
         "/fees/:feeId"
       ],
       "automationTarget": "Playwright",
-      "automationStatus": "planned",
-      "scriptPath": "",
-      "latestResult": "not run",
-      "lastExecuted": null,
-      "notes": "",
-      "updatedAt": "2026-10-11T14:46:17Z"
+      "automationStatus": "automated",
+      "scriptPath": "tests/playwright/ui/pay-ui.spec.ts",
+      "latestResult": "passed",
+      "lastExecuted": "2026-10-12",
+      "notes": "[2026-10-12 10:06 UTC+05:30] PASSED via: cd tests/playwright && npx playwright test ui/pay-ui.spec.ts --project=ui-chromium --grep PAY-UI-002 --reporter=list | 1 passed (3.9s)",
+      "updatedAt": "2026-10-12T04:36:20.773Z"
     },
     {
       "id": "PAY-UI-003",
@@ -1144,12 +1144,12 @@
         "/fees/:feeId/pay"
       ],
       "automationTarget": "Playwright",
-      "automationStatus": "planned",
-      "scriptPath": "",
-      "latestResult": "not run",
-      "lastExecuted": null,
-      "notes": "",
-      "updatedAt": "2026-10-11T14:46:17Z"
+      "automationStatus": "automated",
+      "scriptPath": "tests/playwright/ui/pay-ui.spec.ts",
+      "latestResult": "passed",
+      "lastExecuted": "2026-10-12",
+      "notes": "[2026-10-12 10:08 UTC+05:30] PASSED via: cd tests/playwright && npx playwright test ui/pay-ui.spec.ts --project=ui-chromium --grep PAY-UI-003 --reporter=list | 1 passed (3.0s)",
+      "updatedAt": "2026-10-12T04:38:01.834Z"
     },
     {
       "id": "PAY-UI-004",
@@ -1324,12 +1324,12 @@
         "/payments/:paymentId"
       ],
       "automationTarget": "Playwright",
-      "automationStatus": "planned",
-      "scriptPath": "",
-      "latestResult": "not run",
-      "lastExecuted": null,
-      "notes": "",
-      "updatedAt": "2026-10-11T14:46:17Z"
+      "automationStatus": "automated",
+      "scriptPath": "tests/playwright/ui/txn-ui.spec.ts",
+      "latestResult": "passed",
+      "lastExecuted": "2026-10-12",
+      "notes": "[2026-10-12 09:34 UTC+05:30] PASSED via: cd tests/playwright && npx playwright test ui/txn-ui.spec.ts --project=ui-chromium --grep TXN-UI-001 --reporter=list | 1 passed (4.0s)",
+      "updatedAt": "2026-10-12T04:04:45.405Z"
     },
     {
       "id": "TXN-UI-002",

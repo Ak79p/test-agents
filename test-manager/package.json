@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node server.mjs",
     "validate": "node scripts/validate.mjs",
-    "export:md": "node scripts/export-md.mjs"
+    "export:md": "node scripts/export-md.mjs",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"
