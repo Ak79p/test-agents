@@ -2,8 +2,9 @@
 
 | Field | Value |
 |---|---|
-| Plan status | APPROVED |
-| Catalogue updatedAt | 2026-10-11T14:46:17Z |
+| Plan status | IMPLEMENTED |
+| Requirement fingerprint | `sha256:7ba83475e27bacc2` |
+| Catalogue updatedAt | 2026-10-11T19:15:32.561Z (informational; staleness uses the fingerprint) |
 | Type / target | API → `api` → `tests/playwright/api/pay-api.spec.ts` (tags `@api @payments`) |
 | Priority | P0 |
 
@@ -111,6 +112,16 @@ Run `npm run typecheck` first, because `fixtures/index.ts` and `config/env.ts` c
   2. The setup guards (precondition 200, S1/S4 200, fee found) are kept as an approved exception to the "no extra assertions" rule.
   3. `apiAs` is added now, with PAY-API-001.
 
+## Implementation evidence
+Reviewed 2026-10-12 by the test-validator (Review request; no code changes):
+- Expected-result coverage: **COMPLETE**. All 19 parts of AC1–AC5 are asserted in `tests/playwright/api/pay-api.spec.ts`, which is the catalogue `scriptPath`.
+- `npx playwright test api/pay-api.spec.ts --project=api --grep PAY-API-001 --reporter=list` (cwd `tests/playwright`): `1 passed (823ms)`; with `--repeat-each=3`: `3 passed (2.3s)`.
+- `npm run typecheck` and `npm run check:locators` pass.
+- The implementation follows the test design above. Only the mechanics changed in the 2026-10-12 framework refactor: `dev.restoreSimulation()` replaces the raw `DELETE dev/simulation` (same 200 guard), and `PaymentsApi`/`FeesApi` replace the raw `payer.get/post` calls (same paths, headers and bodies). Every assertion is unchanged.
+
 ## Revision history
 - 2026-10-12 DRAFT created by test-planner
 - 2026-10-12 APPROVED by user; open questions resolved per the recommendations
+- 2026-10-12 Catalogue revision refreshed: `Requirement fingerprint` sha256:7ba83475e27bacc2 added, `Catalogue updatedAt` 2026-10-11T14:46:17Z → 2026-10-11T19:15:32.561Z. The requirement fields (title, preconditions, test data, steps, expected results) are unchanged: the fingerprint is identical at both revisions (git f95e14a and 06a8daf), and AC1–AC5 above still match the catalogue verbatim. The newer `updatedAt` came from tracking-only updates.
+- 2026-10-12 Implementation evidence recorded (see above); the implementation uses the current `PaymentsApi`/`FeesApi` clients and the `dev` fixture.
+- 2026-10-12 IMPLEMENTED by the orchestrator: validator PASSED with complete expected-result coverage, test at the catalogue `scriptPath`, plan fresh (`case.mjs plan PAY-API-001`).

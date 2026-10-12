@@ -13,8 +13,12 @@ tests/playwright/
 ├── api/<area>-api.spec.ts       API tests, one file per area (e.g. api/pay-api.spec.ts)  → project "api"
 ├── ui/<area>-ui.spec.ts         UI tests, one file per area (e.g. ui/auth-ui.spec.ts)    → "ui-chromium", "ui-mobile" (@mobile)
 ├── hybrid/                      reserved for a catalogue Hybrid layer (none today)        → project "hybrid"
-├── fixtures/index.ts            custom test/expect: loginPage, api, apiAs (see FRAMEWORK.md)
-├── pages/                       page objects (login-page.ts)
+├── fixtures/index.ts            custom test/expect and every fixture (see FRAMEWORK.md §3)
+├── pages/                       page objects: login, dashboard, checkout, payment, fee detail, transactions
+│   └── components/              shared UI components (app-nav.ts)
+├── api-clients/                 thin API clients (payments-api.ts, fees-api.ts)
+├── test-data/                   shared test data (cards.ts)
+├── scripts/check-locators.mjs   fails if a spec file creates or selects a locator directly
 ├── .env.example           copy to .env (git-ignored)
 ├── package.json           Playwright deps, kept separate from the frontend
 └── tsconfig.json
@@ -61,8 +65,6 @@ Read configuration only through `config/env.ts`, e.g. `import { env } from '../c
 | `npm run test:ui` | `@ui` tests in `ui-chromium` + `ui-mobile` (each test runs once: `@mobile` tests only on mobile, the rest only on desktop) |
 | `npm run test:mobile` | Mobile UI project (tests tagged `@mobile`) |
 | `npm run test:hybrid` | `@hybrid` tests in the `hybrid` project |
-
-The category scripts pass `--pass-with-no-tests`, so an empty category (currently API and hybrid) exits 0 with "Total: 0 tests".
 | `npm run test:headed` | Desktop UI, visible browser |
 | `npm run test:debug` | Playwright Inspector |
 | `npm run pw:ui` | Playwright UI mode (watch, time-travel) |
@@ -70,6 +72,11 @@ The category scripts pass `--pass-with-no-tests`, so an empty category (currentl
 | `npm run report` | Open the last HTML report |
 | `npm run codegen` | Record interactions against the running UI |
 | `npm run typecheck` | `tsc --noEmit` |
+| `npm run check:locators` | Fails on any locator call (`getBy*`, `locator(`, `.nth/.first/…`) in a spec file; see FRAMEWORK.md §6 |
+
+`test:api` and `test:hybrid` pass `--pass-with-no-tests`, so an empty category (currently hybrid) exits 0 with "Total: 0 tests".
+
+Before the first test in each worker, the automatic `appHealth` fixture checks `API_BASE_URL/health` (and `BASE_URL` for browser projects). If the app is down, tests fail at once with the command to start it (`scripts\start-backend.ps1` / `scripts\start-frontend.ps1`).
 
 ### Running one test
 | By | Command (from `tests/playwright/`) |
@@ -96,7 +103,7 @@ Area tags: `AUTH` → `@auth`, `PAY` → `@payments`, `FEE` → `@fees`, `TXN` �
 test('AUTH-UI-003 <catalogue title>', { tag: ['@ui', '@auth'] }, async ({ page }) => { … });
 ```
 * Add a new case to its file and keep the existing tests. Create the file at the exact path only if it's missing. Grep for the ID first: an existing test is edited in place, never duplicated.
-* A UI case that also checks an API response or localStorage stays in `ui/`. Create an API context with `playwright.request.newContext({ baseURL: env.apiBaseUrl })` and dispose it. `hybrid/` (tag `@hybrid`) is only for a catalogue-defined Hybrid layer, which doesn't exist today.
+* A UI case that also checks an API response or localStorage stays in `ui/` and uses the `api` fixture (an unauthenticated API context, disposed automatically). `hybrid/` (tag `@hybrid`) is only for a catalogue-defined Hybrid layer, which doesn't exist today.
 
 Don't repeat API checks in UI tests. The catalogue already splits coverage along the test pyramid.
 
@@ -104,13 +111,13 @@ Don't repeat API checks in UI tests. The catalogue already splits coverage along
 
 1. **One catalogue ID per test.** The test title starts with the ID, e.g. `test('PAY-API-003 reusing an idempotency key with a different body returns 422', …)`. It goes in the file and carries the tags given by `case.mjs placement <ID>` (see above). Use one `test.step('S<n> …')` per catalogue step.
 2. **API paths are relative** to the API base, without a leading slash: `request.post('payments', …)`. A leading `/` would drop `/api/v1`.
-3. **Selectors:** prefer `getByTestId(...)` (the app has stable `data-testid` attributes, listed in [docs/APPLICATION.md §13](../../docs/APPLICATION.md#13-frontend-notes-for-ui-automation)), then role and label queries.
+3. **Locator-free tests:** spec files use page-object fixtures (`loginPage`, `dashboardPage`, `checkoutPage`, `paymentPage`, `feeDetailPage`, `transactionsPage`, `appNav`) and API clients (`api-clients/`) instead of locators or hand-built requests; acceptance assertions stay in the test (`await expect(dashboardPage.outstandingTotal).toHaveText('R 24 200,00')`). Locators live in `pages/`: prefer `getByTestId(...)` (listed in [docs/APPLICATION.md §13](../../docs/APPLICATION.md#13-frontend-notes-for-ui-automation)), then role and label queries. `npm run check:locators` enforces this; full standards in [FRAMEWORK.md §2](FRAMEWORK.md#2-test-file-standards-mandatory).
 4. **Money formatting:** the UI formats with `en-ZA` and uses non-breaking spaces (e.g. `R 24 200,00`). Normalise whitespace before comparing text.
 5. **Test data isolation:**
-   * Read-only checks on the seeded parents (Thandi, John, …) assume a **freshly seeded** database. `POST /api/v1/dev/reset` re-seeds it, but it **invalidates every access token**, so call it before logging in, never mid-run while other workers are active.
+   * Read-only checks on the seeded parents (Thandi, John, …) assume a **freshly seeded** database. Call `await dev.reset()` (the `dev` fixture, `POST /api/v1/dev/reset`) as the first line of the login step. It **invalidates every access token**, so call it before logging in, never mid-test, and it refuses to run with more than one worker.
    * Tests that create or confirm payments should prefer a dedicated `loadtestNNN@example.com` account (large balances), or reset first.
-   * Tests that change simulation settings (`PUT /api/v1/dev/simulation`) must restore them (`DELETE /api/v1/dev/simulation`) in `afterEach`/`afterAll`.
-6. **Shared helpers and fixtures** go in `fixtures/index.ts` (page objects in `pages/`) only when a second test needs them. Import `test`/`expect` from `../fixtures`.
+   * Simulation settings: `dev.restoreSimulation()` for "at .env defaults", `dev.setSimulation({…})` to change them. The fixture restores the defaults in teardown even when the test fails, so no `afterEach` is needed.
+6. **Fixtures, page objects and clients** are documented in [FRAMEWORK.md §3–5](FRAMEWORK.md#3-fixtures). Search them before adding anything; prefer a new accessor or method on an existing class, and add a new page object, component or client only when nothing covers the screen or resource (FRAMEWORK.md §4 lists the deferred ones). Only a thin API client (§5) may be added in fast mode; anything else new goes through `Automate thorough <ID>` (routing rules in [CLAUDE.md](../../CLAUDE.md#choosing-the-mode)). Import `test`/`expect` from `../fixtures`.
 7. **Catalogue linkage:** recorded with `node test-manager/scripts/case.mjs update <ID> …` (the `test-catalogue-updater` agent does this). Set `latestResult`/`lastExecuted` only after an actual run.
 
 ## Reports and debugging

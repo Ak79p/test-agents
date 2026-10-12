@@ -10,11 +10,16 @@
 //        --script-path tests/playwright/api/auth-api.spec.ts \
 //        --result passed --executed today \
 //        --note "npx playwright test --grep AUTH-API-001 → 1 passed"
+//   node test-manager/scripts/case.mjs fingerprint AUTH-API-001   requirement fingerprint to record in a plan
+//   node test-manager/scripts/case.mjs plan AUTH-API-001          plan status + freshness of tests/plans/<ID>.md
 //
-// Exit codes: 0 ok · 1 usage/validation error · 2 id not found · 3 id duplicated
+// Exit codes: 0 ok (plan: fresh, or no plan) · 1 usage/validation error · 2 id not found · 3 id duplicated · 4 plan stale
 
 import { ID_PATTERN, placementFor, validateTest } from '../lib/catalogue.mjs';
 import { mutateCatalogue, readCatalogue } from '../lib/store.mjs';
+import { parsePlan, planFreshness, requirementFingerprint } from '../lib/plans.mjs';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 
 const UPDATE_FLAGS = {
   '--automation-status': 'automationStatus',
@@ -77,7 +82,7 @@ async function placement(id) {
   const t = resolveCase(await readCatalogue(), id);
   const p = placementFor(t.id);
   if (t.layer === 'Performance') {
-    console.log(JSON.stringify({ id: t.id, layer: t.layer, ...p, command: `cd tests/k6 && k6 run --vus 1 --iterations 1 scripts/${t.id}.js` }, null, 2));
+    console.log(JSON.stringify({ id: t.id, layer: t.layer, ...p, command: `cd tests/k6 && k6 run --no-usage-report --vus 1 --iterations 1 scripts/${t.id}.js` }, null, 2));
     return;
   }
   const project = t.layer === 'API' ? 'api' : /@mobile/.test(t.title) ? 'ui-mobile' : 'ui-chromium';
@@ -126,9 +131,32 @@ async function update(id, args) {
   console.log(JSON.stringify({ id: savedId, automationStatus, scriptPath, latestResult, lastExecuted, notes }, null, 2));
 }
 
+async function fingerprint(id) {
+  console.log(requirementFingerprint(resolveCase(await readCatalogue(), id)));
+}
+
+// Staleness depends only on the requirement fields (lib/plans.mjs), never on tracking updates.
+async function plan(id) {
+  const t = resolveCase(await readCatalogue(), id);
+  const planFile = `tests/plans/${t.id}.md`;
+  let markdown;
+  try {
+    markdown = await readFile(fileURLToPath(new URL(`../../${planFile}`, import.meta.url)), 'utf8');
+  } catch {
+    console.log(JSON.stringify({ id: t.id, planFile: null, fingerprint: requirementFingerprint(t) }, null, 2));
+    return;
+  }
+  const parsed = parsePlan(markdown);
+  const freshness = planFreshness(parsed, t);
+  console.log(JSON.stringify({ id: t.id, planFile, planStatus: parsed.status, ...freshness }, null, 2));
+  if (!freshness.fresh) process.exit(4);
+}
+
 const [command, id, ...rest] = process.argv.slice(2);
 if (command === 'show' && id) await show(id);
 else if (command === 'placement' && id) await placement(id);
 else if (command === 'list') await list([id, ...rest].filter((x) => x !== undefined));
 else if (command === 'update' && id) await update(id, rest);
-else fail('Usage: case.mjs show <ID> | placement <ID> | list [--layer L] [--status S] [--result R] | update <ID> [--automation-status S] [--script-path P] [--result R] [--executed YYYY-MM-DD|today|none] [--notes TEXT] [--note TEXT]');
+else if (command === 'fingerprint' && id) await fingerprint(id);
+else if (command === 'plan' && id) await plan(id);
+else fail('Usage: case.mjs show <ID> | placement <ID> | list [--layer L] [--status S] [--result R] | update <ID> [--automation-status S] [--script-path P] [--result R] [--executed YYYY-MM-DD|today|none] [--notes TEXT] [--note TEXT] | fingerprint <ID> | plan <ID>');

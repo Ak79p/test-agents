@@ -9,7 +9,8 @@ test-manager/
 ├── lib/store.mjs           atomic file persistence (shared by server and CLI)
 ├── public/                 index.html, app.js, styles.css (vanilla JS, no build step)
 ├── data/catalogue.json     ← the catalogue (source of truth, committed to git)
-├── scripts/case.mjs        CLI: show / list / update one case (used by Claude's agents)
+├── scripts/case.mjs        CLI: show / list / update one case, plan freshness (used by Claude's agents)
+├── lib/plans.mjs           requirement fingerprint + plan staleness (tests: npm test)
 └── scripts/validate.mjs    validates catalogue.json
 ```
 
@@ -81,6 +82,8 @@ Results describe the **last execution**, not the quality of the script: a correc
 
 ```bash
 node test-manager/scripts/case.mjs show AUTH-API-001                 # full case as JSON (exact ID match)
+node test-manager/scripts/case.mjs fingerprint AUTH-API-001          # requirement fingerprint (title, preconditions, test data, steps, expected results)
+node test-manager/scripts/case.mjs plan AUTH-API-001                 # tests/plans/<ID>.md status + freshness; exit 4 = stale
 node test-manager/scripts/case.mjs list --layer UI --status planned  # filtered list
 node test-manager/scripts/case.mjs update AUTH-API-001   --automation-status automated   --script-path tests/playwright/api/auth-api.spec.ts   --result passed --executed today   --note "passed via: npx playwright test … | 1 passed"
 ```

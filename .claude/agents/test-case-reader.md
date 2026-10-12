@@ -35,6 +35,8 @@ TARGET: Playwright project <name> → <placement scriptPath> tags <placement tag
 PRIORITY: <P0|P1|P2>
 CURRENT TRACKING: automationStatus=<…> scriptPath=<…> latestResult=<…> lastExecuted=<…>
 
+PRECONDITIONS: <verbatim preconditions, one per line; mark those that map to the dev fixture: "freshly seeded" → dev.reset(), "at .env defaults" → dev.restoreSimulation(), a simulation change → dev.setSimulation()>
+
 SPEC (verbatim JSON from case.mjs):
 <the full JSON object, unmodified>
 
